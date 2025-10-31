@@ -6,6 +6,14 @@
 - Capture navigation hierarchies (menus, breadcrumbs) and semantic landmarks to infer page roles.
 - Extract keyword summaries per page to identify product areas and target audiences.
 
+### Research Notes
+- **Leverage accessibility tooling**: `@axe-core/playwright` or `axe-core` can already extract ARIA landmarks (nav, main, header, footer) and report on missing roles, giving us structured navigation hints without reinventing selectors. Documentation: https://www.deque.com/axe/
+- **ARIA roles dataset**: `aria-query` exposes mappings between HTML elements and implicit ARIA roles, useful for tagging elements during crawl rather than hard-coding selectors. Repo: https://github.com/A11yance/aria-query
+- **Semantic summarization**: `@mozilla/readability` and `metascraper` can parse article-like pages and metadata (titles, descriptions, authors), helping us describe what a page is about. Best for blog/docs sections.
+- **Heading structure parsing**: libraries like `rehype` (with `hast` AST) or `unist-util-visit` can traverse headings to build an outline; this might be heavier but saves time versus manual DOM walking.
+- **Navigation detection**: No turnkey library focused on navigation hierarchy extraction surfaced; most teams roll their own heuristics using `<nav>`, menus, and list structures. We likely need custom logic using the datasets above.
+- **Knowledge graph hints**: Schema.org data (`application/ld+json`) can be parsed with lightweight JSON-LD parsers (e.g., `jsonld-streaming-parser`) to detect entities like `Product`, `FAQPage`, or `BreadcrumbList` that describe site structure.
+
 ## Form & CTA Profiling
 - Classify forms based on field composition and CTA copy to detect onboarding, contact, checkout, or newsletter flows.
 - Flag authentication-related forms (email/password, multi-factor hints) for prioritized stories.
