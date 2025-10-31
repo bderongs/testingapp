@@ -276,6 +276,19 @@ export const crawlSite = async ({
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
+  await context.addInitScript(() => {
+    const globalObject = globalThis as Record<string, unknown>;
+    if (typeof (globalObject as { __name?: unknown }).__name !== 'function') {
+      Object.defineProperty(globalObject, '__name', {
+        value: () => {
+          // no-op placeholder to satisfy inserted helper references
+        },
+        configurable: true,
+        enumerable: false,
+        writable: true,
+      });
+    }
+  });
 
   try {
     while (pending.length > 0 && visited.size < maxPages) {
