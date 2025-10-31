@@ -128,6 +128,7 @@ export const crawlSite = async ({
           if (!discovered.has(resolved) && discovered.size < maxPages) {
             pending.push(resolved);
             discovered.add(resolved);
+            logger.info(`Queued ${resolved}`);
           }
         });
       }
