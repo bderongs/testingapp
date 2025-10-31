@@ -47,6 +47,7 @@ export const crawlSite = async ({
   const normalizedBase = normalizeUrl(baseUrl);
   const pending: string[] = [normalizedBase];
   const visited = new Set<string>();
+  const discovered = new Set<string>([normalizedBase]);
   const pages = new Map<string, PageSummary>();
   const edges = new Map<string, string[]>();
 
@@ -124,8 +125,9 @@ export const crawlSite = async ({
 
           outgoing.push(resolved);
 
-          if (!visited.has(resolved) && !pending.includes(resolved) && visited.size + pending.length < maxPages) {
+          if (!discovered.has(resolved) && discovered.size < maxPages) {
             pending.push(resolved);
+            discovered.add(resolved);
           }
         });
       }
