@@ -34,6 +34,16 @@
 - Assign scores to candidate stories based on CTA prominence, form uniqueness, and coverage gaps.
 - Cluster similar flows (shared form action or CTA text) to avoid redundant stories.
 
+### Story Inference Upgrade Plan
+- Use `navigationSections` and link graph to assemble likely user journeys (primary navigation paths, breadcrumb trails) instead of isolated pages.
+- Combine `schemaOrgTypes`, `metaDescription`, and heading keywords to label each journey with the goal/persona it serves.
+- Prioritise stories that include critical CTAs (e.g., links containing `contact`, `pricing`, `demo`, `signup`) or pages flagged as authentication/complex forms.
+- Track supporting pages (e.g., downstream links reached from the nav path) to provide fuller context within story suggestions.
+- Cap stories per category but ensure every top-level navigation entry proposes at least one candidate, filling coverage gaps automatically.
+
+### Latest Implementation Notes
+- Navigation-driven scoring and persona/goal detection now power `user-stories.json`, enriching each suggestion with CTA intent and audience hints.
+
 ## Developer Feedback Loop
 - Prompt for additional context (credentials, data seeds) when flows appear gated or ambiguous.
 - Persist developer annotations so future crawls respect confirmed or dismissed stories.
