@@ -95,6 +95,7 @@ export const crawlSite = async ({
 
       const outgoing: string[] = [];
       if (domData) {
+        logger.info(`Found ${domData.links.length} link(s) on ${url}`);
         const pageSummary: PageSummary = {
           url,
           title: domData.title,

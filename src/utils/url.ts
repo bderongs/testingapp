@@ -35,7 +35,7 @@ export const isSameOrigin = (origin: string, candidate: string): boolean => {
 export const safeResolve = (base: string, href: string): string | null => {
   try {
     const resolved = new URL(href, base);
-    if (!isHttpProtocol(resolved.protocol)) {
+    if (!HTTP_PROTOCOLS.has(resolved.protocol)) {
       return null;
     }
     return normalizeUrl(resolved.toString());
