@@ -2,7 +2,17 @@
 
 import { chromium, HTTPResponse, Page } from 'playwright';
 
-import type { CrawlOptions, CrawlResult, FormSummary, PageLink, PageSummary } from '../types';
+import type {
+  BreadcrumbEntry,
+  CrawlOptions,
+  CrawlResult,
+  FormSummary,
+  HeadingEntry,
+  LandmarkKind,
+  NavigationSection,
+  PageLink,
+  PageSummary,
+} from '../types';
 import { logger } from '../utils/logger';
 import { isSameOrigin, normalizeUrl, safeResolve } from '../utils/url';
 
@@ -12,6 +22,13 @@ interface DomExtractionResult {
   readonly forms: readonly FormSummary[];
   readonly interactiveElementCount: number;
   readonly hasScrollableSections: boolean;
+  readonly landmarks: readonly LandmarkKind[];
+  readonly navigationSections: readonly NavigationSection[];
+  readonly headingOutline: readonly HeadingEntry[];
+  readonly breadcrumbTrail: readonly BreadcrumbEntry[];
+  readonly schemaOrgTypes: readonly string[];
+  readonly metaDescription?: string;
+  readonly primaryKeywords: readonly string[];
 }
 
 const DEFAULT_MAX_PAGES = 40;
@@ -24,7 +41,7 @@ const extractDomMetadata = async (page: Page) =>
       .filter((anchor) => anchor.href && !anchor.href.startsWith('javascript:'))
       .map((anchor) => ({
         url: anchor.href,
-        text: anchor.innerText.trim() || anchor.getAttribute('aria-label') || '',
+        text: anchor.innerText.trim() || anchor.getAttribute('aria-label') || anchor.textContent?.trim() || '',
       }));
 
     const forms = Array.from(document.querySelectorAll('form')) as HTMLFormElement[];
@@ -61,12 +78,176 @@ const extractDomMetadata = async (page: Page) =>
       element.scrollHeight > window.innerHeight * 1.2
     );
 
+    const landmarks = new Set<LandmarkKind>();
+    if (document.querySelector('header, [role="banner"]')) {
+      landmarks.add('banner');
+    }
+    if (document.querySelector('nav, [role="navigation"]')) {
+      landmarks.add('navigation');
+    }
+    if (document.querySelector('main, [role="main"]')) {
+      landmarks.add('main');
+    }
+    if (document.querySelector('aside, [role="complementary"]')) {
+      landmarks.add('complementary');
+    }
+    if (document.querySelector('footer, [role="contentinfo"]')) {
+      landmarks.add('contentinfo');
+    }
+    if (document.querySelector('[role="search"], form[role="search"], input[type="search"]')) {
+      landmarks.add('search');
+    }
+
+    const navElements = Array.from(new Set(document.querySelectorAll('nav, [role="navigation"]')));
+    const navigationSections = navElements.map<NavigationSection>((element) => {
+      const label = element.getAttribute('aria-label') || element.getAttribute('data-testid') || undefined;
+      const navLinks = Array.from(element.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+
+      const seen = new Set<string>();
+      const items = navLinks
+        .map((link) => {
+          const depth = (() => {
+            let current: Element | null = link.parentElement;
+            let depthValue = 0;
+            while (current && current !== element) {
+              if (current.tagName === 'UL' || current.tagName === 'OL' || current.tagName === 'NAV') {
+                depthValue += 1;
+              }
+              current = current.parentElement;
+            }
+            return depthValue;
+          })();
+
+          return {
+            url: link.href,
+            text: link.innerText.trim() || link.getAttribute('aria-label') || link.textContent?.trim() || '',
+            depth,
+          };
+        })
+        .filter((item) => {
+          const signature = `${item.depth}|${item.url}|${item.text}`;
+          if (seen.has(signature)) {
+            return false;
+          }
+          seen.add(signature);
+          return item.text.length > 0 && item.url.length > 0;
+        });
+
+      return {
+        label,
+        items,
+      };
+    });
+
+    const headingElements = Array.from(document.querySelectorAll('h1, h2, h3, h4')) as HTMLHeadingElement[];
+    const headingOutline = headingElements
+      .map<HeadingEntry>((heading) => ({
+        level: Number.parseInt(heading.tagName.replace('H', ''), 10),
+        text: heading.innerText.trim(),
+        id: heading.id || undefined,
+      }))
+      .filter((entry) => entry.text.length > 0);
+
+    const breadcrumbContainer = (() => {
+      const candidates = Array.from(
+        document.querySelectorAll(
+          'nav[aria-label*="breadcrumb"], [role="navigation"][aria-label*="breadcrumb"], nav.breadcrumb, ol.breadcrumb, ul.breadcrumb'
+        )
+      );
+      return candidates[0] ?? null;
+    })();
+
+    const breadcrumbTrail = breadcrumbContainer
+      ? (() => {
+          const crumbs: BreadcrumbEntry[] = [];
+          const crumbLinks = Array.from(breadcrumbContainer.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+          crumbLinks.forEach((link) => {
+            const text = link.innerText.trim() || link.textContent?.trim() || '';
+            if (!text) {
+              return;
+            }
+            crumbs.push({ url: link.href, text });
+          });
+
+          if (crumbs.length === 0) {
+            const listItems = Array.from(breadcrumbContainer.querySelectorAll('li')) as HTMLLIElement[];
+            listItems.forEach((item) => {
+              const text = item.innerText.trim();
+              if (text.length > 0) {
+                crumbs.push({ url: '', text });
+              }
+            });
+          }
+
+          return crumbs;
+        })()
+      : [];
+
+    const schemaOrgTypes = (() => {
+      const collected = new Set<string>();
+      const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+      const recordType = (value: unknown) => {
+        if (typeof value === 'string') {
+          collected.add(value);
+        } else if (Array.isArray(value)) {
+          value.forEach(recordType);
+        }
+      };
+
+      const walk = (node: unknown) => {
+        if (!node || typeof node !== 'object') {
+          return;
+        }
+        const candidate = node as Record<string, unknown>;
+        if (candidate['@type']) {
+          recordType(candidate['@type']);
+        }
+        Object.values(candidate).forEach(walk);
+      };
+
+      scripts.forEach((script) => {
+        try {
+          const data = JSON.parse(script.textContent || '{}');
+          walk(data);
+        } catch {
+          // Ignore malformed JSON-LD entries.
+        }
+      });
+
+      return Array.from(collected);
+    })();
+
+    const metaDescription = document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() || undefined;
+
+    const keywordsFromMeta = (() => {
+      const metaKeywords = document.querySelector('meta[name="keywords"]')?.getAttribute('content');
+      if (!metaKeywords) {
+        return [] as string[];
+      }
+      return metaKeywords
+        .split(',')
+        .map((keyword) => keyword.trim())
+        .filter((keyword) => keyword.length > 0)
+        .slice(0, 12);
+    })();
+
+    const headingKeywords = headingOutline.slice(0, 5).map((entry) => entry.text).filter((text) => text.length > 0);
+
+    const primaryKeywords = keywordsFromMeta.length > 0 ? keywordsFromMeta : headingKeywords;
+
     return {
       title: document.title || '',
       links,
       forms: formSummaries,
       interactiveElementCount: interactiveElements.length,
       hasScrollableSections: scrollableSections.length > 0,
+      landmarks: Array.from(landmarks),
+      navigationSections,
+      headingOutline,
+      breadcrumbTrail,
+      schemaOrgTypes,
+      metaDescription,
+      primaryKeywords,
     };
   });
 
@@ -134,6 +315,13 @@ export const crawlSite = async ({
           forms: domData.forms,
           interactiveElementCount: domData.interactiveElementCount,
           hasScrollableSections: domData.hasScrollableSections,
+          landmarks: domData.landmarks,
+          navigationSections: domData.navigationSections,
+          headingOutline: domData.headingOutline,
+          breadcrumbTrail: domData.breadcrumbTrail,
+          schemaOrgTypes: domData.schemaOrgTypes,
+          metaDescription: domData.metaDescription,
+          primaryKeywords: domData.primaryKeywords,
         };
         pages.set(url, pageSummary);
 

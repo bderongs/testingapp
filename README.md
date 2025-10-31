@@ -24,7 +24,7 @@ Sparkier Web Auditor is an early prototype that crawls a target website, builds 
 
 ## Outputs
 
-- `output/site-map.json`: flattened page summaries with link relationships.
+- `output/site-map.json`: flattened page summaries with link relationships, navigation hierarchies, heading outlines, schema.org hints, and keyword cues for each URL.
 - `output/user-stories.json`: heuristically ranked user story suggestions grouped into browsing, interaction, authentication, and complex categories.
 
 ## Next Steps

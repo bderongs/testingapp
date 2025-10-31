@@ -27,6 +27,30 @@ export interface FormSummary {
   readonly fields: readonly FormFieldSummary[];
 }
 
+export type LandmarkKind = 'banner' | 'navigation' | 'main' | 'complementary' | 'contentinfo' | 'search';
+
+export interface NavigationItem {
+  readonly url: string;
+  readonly text: string;
+  readonly depth: number;
+}
+
+export interface NavigationSection {
+  readonly label?: string;
+  readonly items: readonly NavigationItem[];
+}
+
+export interface HeadingEntry {
+  readonly level: number;
+  readonly text: string;
+  readonly id?: string;
+}
+
+export interface BreadcrumbEntry {
+  readonly url: string;
+  readonly text: string;
+}
+
 export interface PageSummary {
   readonly url: string;
   readonly title: string;
@@ -35,6 +59,13 @@ export interface PageSummary {
   readonly forms: readonly FormSummary[];
   readonly interactiveElementCount: number;
   readonly hasScrollableSections: boolean;
+  readonly landmarks: readonly LandmarkKind[];
+  readonly navigationSections: readonly NavigationSection[];
+  readonly headingOutline: readonly HeadingEntry[];
+  readonly breadcrumbTrail: readonly BreadcrumbEntry[];
+  readonly schemaOrgTypes: readonly string[];
+  readonly metaDescription?: string;
+  readonly primaryKeywords: readonly string[];
 }
 
 export interface CrawlResult {
