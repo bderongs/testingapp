@@ -1,1 +1,34 @@
+<!-- This README introduces the Sparkier Web Auditor prototype and explains how to run the crawler. -->
+
 # testingapp
+
+## Overview
+
+Sparkier Web Auditor is an early prototype that crawls a target website, builds a structured map of its pages, and infers initial user story candidates. Each story can later be converted into a Playwright regression script to protect against regressions introduced by large-scale edits.
+
+## Getting Started
+
+1. Install dependencies (Playwright requires additional browser binaries on first run):
+   ```bash
+   npm install
+   npx playwright install
+   ```
+2. Run the crawler in development mode:
+   ```bash
+   npm run dev -- --url=https://example.com --max-pages=30
+   ```
+   Adjust flags as needed:
+   - `--max-pages` (default 40) controls crawl breadth.
+   - `--same-origin-only=false` allows stepping into sub-domains or external links.
+   - `--navigation-timeout=15000` sets the load timeout in milliseconds.
+
+## Outputs
+
+- `output/site-map.json`: flattened page summaries with link relationships.
+- `output/user-stories.json`: heuristically ranked user story suggestions grouped into browsing, interaction, authentication, and complex categories.
+
+## Next Steps
+
+- Record approved stories as Playwright scripts and plug them into CI.
+- Collect developer feedback to refine story heuristics and add workspace-specific overrides (e.g., login credentials, data seeds).
+- Layer visual diffing and performance checks on top of the crawl results.
