@@ -36,14 +36,17 @@ const DEFAULT_TIMEOUT_MS = 15000;
 
 const extractDomMetadata = async (page: Page) =>
   page.evaluate<DomExtractionResult>(() => {
-    const __name = (target: Function, value: string): void => {
-      try {
-        Object.defineProperty(target, 'name', { value, configurable: true });
-      } catch {
-        // Ignore environments where function names are not configurable.
-      }
-    };
-
+    const globalObject = globalThis as Record<string, unknown>;
+    if (typeof globalObject.__name !== 'function') {
+      Object.defineProperty(globalObject, '__name', {
+        value: () => {
+          // no-op placeholder to satisfy inserted helper references
+        },
+        configurable: true,
+        enumerable: false,
+        writable: true,
+      });
+    }
     const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
     const links = anchors
       .filter((anchor) => anchor.href && !anchor.href.startsWith('javascript:'))
