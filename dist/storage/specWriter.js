@@ -1,15 +1,9 @@
 // This file generates Playwright spec skeletons from user story metadata for repeatable regression checks.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { sanitizeFileSlug } from '../lib/sanitize';
 import { logger } from '../utils/logger';
 const OUTPUT_DIR = 'output/playwright';
-const sanitizeFileName = (value, fallback) => {
-    const base = (value && value.trim().length > 0 ? value : fallback)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-');
-    const trimmed = base.replace(/^-+|-+$/g, '');
-    return trimmed.length > 0 ? trimmed : fallback.toLowerCase();
-};
 const escapeForSingleQuote = (input) => input.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const formatCommentList = (heading, items) => {
     if (!items.length) {
@@ -47,7 +41,7 @@ const buildSpecContent = (story) => {
 export const persistSpecs = async (stories) => {
     await mkdir(OUTPUT_DIR, { recursive: true });
     await Promise.all(stories.map(async (story) => {
-        const fileName = `${sanitizeFileName(story.suggestedScriptName, story.id)}.spec.ts`;
+        const fileName = `${sanitizeFileSlug(story.suggestedScriptName, story.id)}.spec.ts`;
         const targetPath = join(OUTPUT_DIR, fileName);
         const content = buildSpecContent(story);
         await writeFile(targetPath, content);

@@ -1,26 +1,41 @@
 {
-  "_comment": "Package manifest for the Sparkier web auditor CLI prototype.",
+  "_comment": "Package manifest for the Sparkier web auditor CLI and UI prototype.",
   "name": "sparkier-web-auditor",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.cli.json",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
+    "dev": "next dev",
+    "dev:cli": "tsx src/index.ts",
+    "dev:ui": "next dev",
+    "build:ui": "next build",
+    "start:ui": "next start",
     "lint": "eslint --ext .ts src"
   },
   "dependencies": {
+    "clsx": "2.1.1",
+    "lucide-react": "0.460.0",
+    "next": "15.1.7",
     "playwright": "1.49.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "tailwind-merge": "2.5.2",
     "zod": "3.23.8"
   },
   "devDependencies": {
     "@types/node": "22.7.5",
+    "@types/react": "19.0.2",
+    "@types/react-dom": "19.0.1",
+    "autoprefixer": "10.4.20",
     "eslint": "8.57.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-plugin-import": "2.29.1",
     "eslint-plugin-jsdoc": "48.10.2",
     "eslint-plugin-promise": "6.1.1",
+    "postcss": "8.4.47",
+    "tailwindcss": "3.4.15",
     "tsx": "4.19.2",
     "typescript": "5.6.3"
   }

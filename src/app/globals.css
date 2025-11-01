@@ -1,0 +1,16 @@
+/* This file provides global Tailwind resets and base styles for the Sparkier UI. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+a {
+  @apply text-sparkier-primary transition-colors hover:text-sparkier-secondary;
+}

@@ -4,17 +4,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { UserStory } from '../types';
+import { sanitizeFileSlug } from '../lib/sanitize';
 import { logger } from '../utils/logger';
 
 const OUTPUT_DIR = 'output/playwright';
-
-const sanitizeFileName = (value: string | undefined, fallback: string): string => {
-  const base = (value && value.trim().length > 0 ? value : fallback)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-');
-  const trimmed = base.replace(/^-+|-+$/g, '');
-  return trimmed.length > 0 ? trimmed : fallback.toLowerCase();
-};
 
 const escapeForSingleQuote = (input: string): string => input.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
@@ -66,7 +59,7 @@ export const persistSpecs = async (stories: readonly UserStory[]): Promise<void>
 
   await Promise.all(
     stories.map(async (story) => {
-      const fileName = `${sanitizeFileName(story.suggestedScriptName, story.id)}.spec.ts`;
+      const fileName = `${sanitizeFileSlug(story.suggestedScriptName, story.id)}.spec.ts`;
       const targetPath = join(OUTPUT_DIR, fileName);
       const content = buildSpecContent(story);
       await writeFile(targetPath, content);
