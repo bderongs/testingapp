@@ -26,6 +26,7 @@ Sparkier Web Auditor is an early prototype that crawls a target website, builds 
 
 - `output/site-map.json`: flattened page summaries with link relationships, navigation hierarchies, heading outlines, schema.org hints, and keyword cues for each URL.
 - `output/user-stories.json`: heuristically ranked user story suggestions grouped into browsing, interaction, authentication, and complex categories; each story highlights the navigation path, target persona cues, the key CTA label (`primaryCtaLabel`), an auto-generated Playwright outline (`playwrightOutline`), and primary goal when detected.
+- `output/playwright/*.spec.ts`: Playwright Test skeletons built from `playwrightOutline`, `expectedOutcome`, `baselineAssertions`, and `repeatabilityNotes`, ready for refinement and verification.
 
 ## Next Steps
 

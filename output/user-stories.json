@@ -24,7 +24,19 @@
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
       "await expect(page).toHaveURL(/https://www\\.sparkier\\.io/terms/); // adjust expected destination if necessary"
-    ]
+    ],
+    "expectedOutcome": "Successful authentication using the provided test account without triggering MFA or lockout.",
+    "baselineAssertions": [
+      "Title matches \"Connexion | Sparkier\".",
+      "Primary heading displays \"Espace Consultant\".",
+      "CTA \"Continuer avec LinkedIn\" is visible and interactive.",
+      "Navigation link \"Connexion\" remains visible.",
+      "Key form fields accept input and validation messages remain clear."
+    ],
+    "repeatabilityNotes": [
+      "Use dedicated non-production credentials; ensure account is reset between runs."
+    ],
+    "verificationStatus": "unverified"
   },
   {
     "id": "browsing-7ef20406",
@@ -53,7 +65,18 @@
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
       "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
-    ]
+    ],
+    "expectedOutcome": "Review frequently asked questions",
+    "baselineAssertions": [
+      "Title matches \"Sparkier - Boostez votre activité avec les Sparks\".",
+      "Primary heading displays \"Débloquez vos décisions stratégiques en 1h\".",
+      "CTA \"Connexion\" is visible and interactive.",
+      "Navigation link \"Sparkier\" remains visible."
+    ],
+    "repeatabilityNotes": [
+      "No special setup required; verify target environment stability before regression runs."
+    ],
+    "verificationStatus": "unverified"
   },
   {
     "id": "interaction-76c329cf",
@@ -81,7 +104,18 @@
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
       "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
-    ]
+    ],
+    "expectedOutcome": "Primary interaction completes without errors by activating \"Commencer\".",
+    "baselineAssertions": [
+      "Title matches \"Sparkier - Créez votre boutique de conseil en ligne | Vendez vos Sparks\".",
+      "Primary heading displays \"La boutique du consulting\".",
+      "CTA \"Commencer\" is visible and interactive.",
+      "Navigation link \"Vendre avec Sparkier\" remains visible."
+    ],
+    "repeatabilityNotes": [
+      "No special setup required; verify target environment stability before regression runs."
+    ],
+    "verificationStatus": "unverified"
   },
   {
     "id": "interaction-124babfb",
@@ -109,7 +143,18 @@
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
       "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
-    ]
+    ],
+    "expectedOutcome": "Evaluate the product offering",
+    "baselineAssertions": [
+      "Title matches \"Conformité RGPD en 5 étapes pour Freelances | Sparkier\".",
+      "Primary heading displays \"Conformité RGPD en 5 étapes pour Freelances\".",
+      "CTA \"Réserver\" is visible and interactive."
+    ],
+    "repeatabilityNotes": [
+      "Mock downstream booking/purchase side-effects or run against a sandbox environment.",
+      "Ensure referenced spark data remains available in the target environment."
+    ],
+    "verificationStatus": "unverified"
   },
   {
     "id": "interaction-467e8012",
@@ -135,6 +180,16 @@
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
       "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
-    ]
+    ],
+    "expectedOutcome": "Primary interaction completes without errors by activating \"Connexion\".",
+    "baselineAssertions": [
+      "Title matches \"Conformité et Impact - RSE, RGPD pour PME | Sparkier\".",
+      "Primary heading displays \"Conformité & Impact\".",
+      "CTA \"Connexion\" is visible and interactive."
+    ],
+    "repeatabilityNotes": [
+      "No special setup required; verify target environment stability before regression runs."
+    ],
+    "verificationStatus": "unverified"
   }
 ]

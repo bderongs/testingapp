@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import type { AuditArtifacts } from '../types';
 import { logger } from '../utils/logger';
+import { persistSpecs } from './specWriter';
 
 const OUTPUT_DIR = 'output';
 
@@ -29,4 +30,6 @@ export const persistArtifacts = async (artifacts: AuditArtifacts): Promise<void>
   ]);
 
   logger.info(`Artifacts saved to ${OUTPUT_DIR}/site-map.json and ${OUTPUT_DIR}/user-stories.json`);
+
+  await persistSpecs(artifacts.userStories);
 };

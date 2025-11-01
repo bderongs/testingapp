@@ -45,6 +45,7 @@
 - Navigation-driven scoring and persona/goal detection now power `user-stories.json`, enriching each suggestion with CTA intent and audience hints.
 - CTA labels are captured from interactive elements, normalised (including fixes for broken spacing/accents), and surfaced as `primaryCtaLabel` for downstream scripting.
 - Each story now provides a `playwrightOutline`, a ready-to-adapt list of Playwright steps (goto, assertions, CTA clicks) to accelerate script authoring.
+- Skeleton Playwright specs are emitted to `output/playwright/*.spec.ts`, bundling outlines with expected outcomes, baseline assertions, and repeatability notes for regression runs.
 
 ## Developer Feedback Loop
 - Prompt for additional context (credentials, data seeds) when flows appear gated or ambiguous.

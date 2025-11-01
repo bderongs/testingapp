@@ -10,7 +10,7 @@ const STORY_LIMIT_PER_KIND = 3;
 const AUTH_KEYWORDS = ['login', 'log in', 'sign in', 'connexion'];
 const CTA_KEYWORDS = ['pricing', 'price', 'contact', 'demo', 'start', 'signup', 'sign up', 'book', 'trial', 'quote'];
 const CTA_PREFERRED_KEYWORDS: Array<{ readonly terms: readonly string[]; readonly score: number }> = [
-  { terms: ['r?server', 'reserver', 'book'], score: 30 },
+  { terms: ['reserver', 'reserve', 'book'], score: 30 },
   { terms: ['commencer', 'start', 'get started'], score: 24 },
   { terms: ['essayer', 'try'], score: 22 },
   { terms: ['acheter', 'buy', 'purchase'], score: 20 },
@@ -395,7 +395,7 @@ const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, 
     case 'complex':
       return 'Form submission succeeds with test data and displays the expected confirmation state.';
     case 'interaction': {
-      const cta = primaryCtaLabel ? ` by activating ?${primaryCtaLabel}?` : '';
+      const cta = primaryCtaLabel ? ` by activating "${primaryCtaLabel}"` : '';
       return `Primary interaction completes without errors${cta}.`;
     }
     case 'browsing':
@@ -412,19 +412,19 @@ const buildBaselineAssertions = ({
   const assertions: string[] = [];
 
   if (page.title) {
-    assertions.push(`Title matches ?${page.title}?.`);
+    assertions.push(`Title matches "${page.title}".`);
   }
 
   if (page.headingOutline[0]?.text) {
-    assertions.push(`Primary heading displays ?${page.headingOutline[0]?.text}?.`);
+    assertions.push(`Primary heading displays "${page.headingOutline[0]?.text}".`);
   }
 
   if (primaryCtaLabel) {
-    assertions.push(`CTA ?${primaryCtaLabel}? is visible and interactive.`);
+    assertions.push(`CTA "${primaryCtaLabel}" is visible and interactive.`);
   }
 
   if (navRefs[0]) {
-    assertions.push(`Navigation link ?${navRefs[0].itemLabel}? remains visible.`);
+    assertions.push(`Navigation link "${navRefs[0].itemLabel}" remains visible.`);
   }
 
   if (page.forms.length > 0) {
@@ -449,8 +449,11 @@ const buildRepeatabilityNotes = ({
     notes.push('Provide deterministic test data for form fields and clear submissions after each run.');
   }
 
-  if (primaryCtaLabel && /r?server|book|purchase|checkout/i.test(primaryCtaLabel)) {
-    notes.push('Mock downstream booking/purchase side-effects or run against a sandbox environment.');
+  if (primaryCtaLabel) {
+    const ctaFolded = primaryCtaLabel.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+    if (/reserver|reserve|book|purchase|checkout/.test(ctaFolded)) {
+      notes.push('Mock downstream booking/purchase side-effects or run against a sandbox environment.');
+    }
   }
 
   if (page.url.includes('/sparks/')) {
