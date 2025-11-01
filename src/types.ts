@@ -85,6 +85,10 @@ export interface UserStory {
   readonly supportingPages: readonly string[];
   readonly primaryCtaLabel?: string;
   readonly playwrightOutline: readonly string[];
+  readonly expectedOutcome: string;
+  readonly baselineAssertions: readonly string[];
+  readonly repeatabilityNotes: readonly string[];
+  readonly verificationStatus: 'unverified' | 'baseline' | 'outdated';
 }
 
 export interface AuditArtifacts {

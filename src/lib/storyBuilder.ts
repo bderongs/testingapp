@@ -384,6 +384,86 @@ const buildPlaywrightOutline = ({
   return Array.from(new Set(steps));
 };
 
+const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, primaryCtaLabel: string | undefined): string => {
+  if (goalSummary) {
+    return toSentenceCase(goalSummary);
+  }
+
+  switch (kind) {
+    case 'authentication':
+      return 'Successful authentication using the provided test account without triggering MFA or lockout.';
+    case 'complex':
+      return 'Form submission succeeds with test data and displays the expected confirmation state.';
+    case 'interaction': {
+      const cta = primaryCtaLabel ? ` by activating ?${primaryCtaLabel}?` : '';
+      return `Primary interaction completes without errors${cta}.`;
+    }
+    case 'browsing':
+    default:
+      return 'Page content loads without errors and primary navigation remains accessible.';
+  }
+};
+
+const buildBaselineAssertions = ({
+  page,
+  navRefs,
+  primaryCtaLabel,
+}: Pick<OutlineContext, 'page' | 'navRefs' | 'primaryCtaLabel'>): string[] => {
+  const assertions: string[] = [];
+
+  if (page.title) {
+    assertions.push(`Title matches ?${page.title}?.`);
+  }
+
+  if (page.headingOutline[0]?.text) {
+    assertions.push(`Primary heading displays ?${page.headingOutline[0]?.text}?.`);
+  }
+
+  if (primaryCtaLabel) {
+    assertions.push(`CTA ?${primaryCtaLabel}? is visible and interactive.`);
+  }
+
+  if (navRefs[0]) {
+    assertions.push(`Navigation link ?${navRefs[0].itemLabel}? remains visible.`);
+  }
+
+  if (page.forms.length > 0) {
+    assertions.push('Key form fields accept input and validation messages remain clear.');
+  }
+
+  return Array.from(new Set(assertions));
+};
+
+const buildRepeatabilityNotes = ({
+  kind,
+  page,
+  primaryCtaLabel,
+}: Pick<OutlineContext, 'kind' | 'page' | 'primaryCtaLabel'>): string[] => {
+  const notes: string[] = [];
+
+  if (kind === 'authentication') {
+    notes.push('Use dedicated non-production credentials; ensure account is reset between runs.');
+  }
+
+  if (page.forms.length > 0 && kind !== 'authentication') {
+    notes.push('Provide deterministic test data for form fields and clear submissions after each run.');
+  }
+
+  if (primaryCtaLabel && /r?server|book|purchase|checkout/i.test(primaryCtaLabel)) {
+    notes.push('Mock downstream booking/purchase side-effects or run against a sandbox environment.');
+  }
+
+  if (page.url.includes('/sparks/')) {
+    notes.push('Ensure referenced spark data remains available in the target environment.');
+  }
+
+  if (!notes.length) {
+    notes.push('No special setup required; verify target environment stability before regression runs.');
+  }
+
+  return notes;
+};
+
 const selectPrimaryCtaLabel = (ctas: readonly string[]): string | undefined => {
   if (ctas.length === 0) {
     return undefined;
@@ -580,6 +660,9 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       goalSummary,
       supportingPages: supporting,
     });
+    const expectedOutcome = buildExpectedOutcome(kind, goalSummary, primaryCtaLabel);
+    const baselineAssertions = buildBaselineAssertions({ page, navRefs, primaryCtaLabel });
+    const repeatabilityNotes = buildRepeatabilityNotes({ kind, page, primaryCtaLabel });
 
     const story: UserStory = {
       id: buildId(page, kind),
@@ -591,6 +674,10 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       supportingPages: supporting.slice(0, 5),
       primaryCtaLabel,
       playwrightOutline: outline,
+      expectedOutcome,
+      baselineAssertions,
+      repeatabilityNotes,
+      verificationStatus: 'unverified',
     };
 
     grouped[kind].push(story);
