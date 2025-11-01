@@ -11,7 +11,20 @@
       "https://www.sparkier.io/privacy",
       "https://www.sparkier.io/auth/clients"
     ],
-    "primaryCtaLabel": "Continuer avec LinkedIn"
+    "primaryCtaLabel": "Continuer avec LinkedIn",
+    "playwrightOutline": [
+      "await page.goto('https://www.sparkier.io/auth/signin', { waitUntil: 'networkidle' });",
+      "await expect(page).toHaveTitle(/Connexion \\| Sparkier/i);",
+      "await expect(page.getByRole('heading', { level: 2, name: /Espace Consultant/i })).toBeVisible();",
+      "await expect(page.getByRole('link', { name: /Connexion/i })).toBeVisible();",
+      "// Detected form fields: email.",
+      "// TODO: Provide authentication credentials (e.g., TEST_EMAIL / TEST_PASSWORD) before running this scenario.",
+      "const cta = page.getByRole('button', { name: /Continuer avec LinkedIn/i }).or(page.getByRole('link', { name: /Continuer avec LinkedIn/i }));",
+      "await expect(cta).toBeVisible();",
+      "await cta.click();",
+      "// Verify navigation after performing the primary action.",
+      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io/terms/); // adjust expected destination if necessary"
+    ]
   },
   {
     "id": "browsing-7ef20406",
@@ -27,7 +40,20 @@
       "https://www.sparkier.io/hub/conformite-impact",
       "https://www.sparkier.io/sparks/spark-1757930749824"
     ],
-    "primaryCtaLabel": "Connexion"
+    "primaryCtaLabel": "Connexion",
+    "playwrightOutline": [
+      "await page.goto('https://www.sparkier.io/', { waitUntil: 'networkidle' });",
+      "await expect(page).toHaveTitle(/Sparkier - Boostez votre activité avec les Sparks/i);",
+      "await expect(page.getByRole('heading', { level: 1, name: /Débloquez vos décisions stratégiques en 1h/i })).toBeVisible();",
+      "await expect(page.getByRole('link', { name: /Sparkier/i })).toBeVisible();",
+      "// Persona focus: marketing.",
+      "// Goal: Review frequently asked questions.",
+      "const cta = page.getByRole('button', { name: /Connexion/i }).or(page.getByRole('link', { name: /Connexion/i }));",
+      "await expect(cta).toBeVisible();",
+      "await cta.click();",
+      "// Verify navigation after performing the primary action.",
+      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+    ]
   },
   {
     "id": "interaction-76c329cf",
@@ -43,7 +69,19 @@
       "https://www.sparkier.io/auth/consultants",
       "https://www.sparkier.io/consultants"
     ],
-    "primaryCtaLabel": "Commencer"
+    "primaryCtaLabel": "Commencer",
+    "playwrightOutline": [
+      "await page.goto('https://www.sparkier.io/consultants', { waitUntil: 'networkidle' });",
+      "await expect(page).toHaveTitle(/Sparkier - Créez votre boutique de conseil en ligne \\| Vendez vos Sparks/i);",
+      "await expect(page.getByRole('heading', { level: 1, name: /La boutique du consulting/i })).toBeVisible();",
+      "await expect(page.getByRole('link', { name: /Vendre avec Sparkier/i })).toBeVisible();",
+      "// Persona focus: design.",
+      "const cta = page.getByRole('button', { name: /Commencer/i }).or(page.getByRole('link', { name: /Commencer/i }));",
+      "await expect(cta).toBeVisible();",
+      "await cta.click();",
+      "// Verify navigation after performing the primary action.",
+      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+    ]
   },
   {
     "id": "interaction-124babfb",
@@ -59,7 +97,19 @@
       "https://www.sparkier.io/sparks",
       "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data"
     ],
-    "primaryCtaLabel": "Réserver"
+    "primaryCtaLabel": "Réserver",
+    "playwrightOutline": [
+      "await page.goto('https://www.sparkier.io/sparks/spark-1757930749824', { waitUntil: 'networkidle' });",
+      "await expect(page).toHaveTitle(/Conformité RGPD en 5 étapes pour Freelances \\| Sparkier/i);",
+      "await expect(page.getByRole('heading', { level: 1, name: /Conformité RGPD en 5 étapes pour Freelances/i })).toBeVisible();",
+      "// Persona focus: builders.",
+      "// Goal: Evaluate the product offering.",
+      "const cta = page.getByRole('button', { name: /Réserver/i }).or(page.getByRole('link', { name: /Réserver/i }));",
+      "await expect(cta).toBeVisible();",
+      "await cta.click();",
+      "// Verify navigation after performing the primary action.",
+      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+    ]
   },
   {
     "id": "interaction-467e8012",
@@ -75,6 +125,16 @@
       "https://www.sparkier.io/eleonore-mabille",
       "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data"
     ],
-    "primaryCtaLabel": "Connexion"
+    "primaryCtaLabel": "Connexion",
+    "playwrightOutline": [
+      "await page.goto('https://www.sparkier.io/hub/conformite-impact', { waitUntil: 'networkidle' });",
+      "await expect(page).toHaveTitle(/Conformité et Impact - RSE, RGPD pour PME \\| Sparkier/i);",
+      "await expect(page.getByRole('heading', { level: 1, name: /Conformité & Impact/i })).toBeVisible();",
+      "const cta = page.getByRole('button', { name: /Connexion/i }).or(page.getByRole('link', { name: /Connexion/i }));",
+      "await expect(cta).toBeVisible();",
+      "await cta.click();",
+      "// Verify navigation after performing the primary action.",
+      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+    ]
   }
 ]

@@ -84,6 +84,7 @@ export interface UserStory {
   readonly suggestedScriptName: string;
   readonly supportingPages: readonly string[];
   readonly primaryCtaLabel?: string;
+  readonly playwrightOutline: readonly string[];
 }
 
 export interface AuditArtifacts {

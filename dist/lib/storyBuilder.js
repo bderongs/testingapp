@@ -31,6 +31,18 @@ const SCHEMA_KIND_MAP = {
     aboutpage: 'browsing',
     collectionpage: 'browsing',
 };
+const escapeForRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeForSingleQuote = (value) => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+const toSentenceCase = (value) => {
+    if (!value) {
+        return value;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+        return trimmed;
+    }
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+};
 const toSlug = (input) => input
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -211,6 +223,59 @@ const deriveScriptName = (page, kind, navRefs, primaryCtaLabel) => {
     const slug = toSlug(primaryLabel);
     return `${kind}-${slug || 'flow'}`;
 };
+const buildPlaywrightOutline = ({ page, kind, navRefs, primaryCtaLabel, personaTag, goalSummary, supportingPages, }) => {
+    const steps = [];
+    const escapedUrl = escapeForSingleQuote(page.url);
+    steps.push(`await page.goto('${escapedUrl}', { waitUntil: 'networkidle' });`);
+    if (page.title) {
+        steps.push(`await expect(page).toHaveTitle(/${escapeForRegex(page.title)}/i);`);
+    }
+    const primaryHeading = page.headingOutline[0];
+    if (primaryHeading?.text) {
+        const headingRegex = escapeForRegex(primaryHeading.text);
+        const level = primaryHeading.level ?? 1;
+        steps.push(`await expect(page.getByRole('heading', { level: ${level}, name: /${headingRegex}/i })).toBeVisible();`);
+    }
+    if (navRefs[0]) {
+        const navRegex = escapeForRegex(navRefs[0].itemLabel);
+        steps.push(`await expect(page.getByRole('link', { name: /${navRegex}/i })).toBeVisible();`);
+    }
+    if (personaTag) {
+        steps.push(`// Persona focus: ${personaTag}.`);
+    }
+    if (goalSummary) {
+        steps.push(`// Goal: ${toSentenceCase(goalSummary)}.`);
+    }
+    if (page.forms.length > 0) {
+        const primaryForm = page.forms[0];
+        const fieldHints = primaryForm.fields
+            .map((field) => field.label?.trim() || field.name || field.type)
+            .filter((value, index, array) => value && array.indexOf(value) === index)
+            .slice(0, 4);
+        if (fieldHints.length > 0) {
+            steps.push(`// Detected form fields: ${fieldHints.join(', ')}.`);
+        }
+    }
+    if (kind === 'authentication') {
+        steps.push('// TODO: Provide authentication credentials (e.g., TEST_EMAIL / TEST_PASSWORD) before running this scenario.');
+    }
+    if (primaryCtaLabel) {
+        const ctaRegex = escapeForRegex(primaryCtaLabel);
+        steps.push(`const cta = page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }));`);
+        steps.push('await expect(cta).toBeVisible();');
+        steps.push('await cta.click();');
+    }
+    if (kind === 'complex' && page.forms.length > 0) {
+        steps.push('// TODO: Fill in the required form fields and submit the form.');
+    }
+    if (supportingPages.length > 0) {
+        const targetUrl = supportingPages[0];
+        const urlRegex = escapeForRegex(targetUrl);
+        steps.push('// Verify navigation after performing the primary action.');
+        steps.push(`await expect(page).toHaveURL(/${urlRegex}/); // adjust expected destination if necessary`);
+    }
+    return Array.from(new Set(steps));
+};
 const selectPrimaryCtaLabel = (ctas) => {
     if (ctas.length === 0) {
         return undefined;
@@ -361,6 +426,15 @@ export const identifyUserStories = (crawl) => {
             continue;
         }
         const supporting = crawl.edges.get(page.url) ?? [];
+        const outline = buildPlaywrightOutline({
+            page,
+            kind,
+            navRefs,
+            primaryCtaLabel,
+            personaTag,
+            goalSummary,
+            supportingPages: supporting,
+        });
         const story = {
             id: buildId(page, kind),
             kind,
@@ -370,6 +444,7 @@ export const identifyUserStories = (crawl) => {
             suggestedScriptName: deriveScriptName(page, kind, navRefs, primaryCtaLabel),
             supportingPages: supporting.slice(0, 5),
             primaryCtaLabel,
+            playwrightOutline: outline,
         };
         grouped[kind].push(story);
         selectedUrls.add(`${normalizedUrl}-${kind}`);

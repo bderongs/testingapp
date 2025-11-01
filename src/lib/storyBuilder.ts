@@ -39,6 +39,21 @@ const SCHEMA_KIND_MAP: Record<string, StoryKind> = {
   collectionpage: 'browsing',
 };
 
+const escapeForRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const escapeForSingleQuote = (value: string): string => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+const toSentenceCase = (value: string): string => {
+  if (!value) {
+    return value;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return trimmed;
+  }
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+};
+
 interface NavReference {
   readonly path: string;
   readonly itemLabel: string;
@@ -54,6 +69,16 @@ interface StoryCandidate {
   readonly personaTag?: string;
   readonly goalSummary?: string;
   readonly primaryCtaLabel?: string;
+}
+
+interface OutlineContext {
+  readonly page: PageSummary;
+  readonly kind: StoryKind;
+  readonly navRefs: readonly NavReference[];
+  readonly primaryCtaLabel?: string;
+  readonly personaTag?: string;
+  readonly goalSummary?: string;
+  readonly supportingPages: readonly string[];
 }
 
 const toSlug = (input: string): string =>
@@ -285,6 +310,80 @@ const deriveScriptName = (page: PageSummary, kind: StoryKind, navRefs: readonly 
   return `${kind}-${slug || 'flow'}`;
 };
 
+const buildPlaywrightOutline = ({
+  page,
+  kind,
+  navRefs,
+  primaryCtaLabel,
+  personaTag,
+  goalSummary,
+  supportingPages,
+}: OutlineContext): string[] => {
+  const steps: string[] = [];
+
+  const escapedUrl = escapeForSingleQuote(page.url);
+  steps.push(`await page.goto('${escapedUrl}', { waitUntil: 'networkidle' });`);
+
+  if (page.title) {
+    steps.push(`await expect(page).toHaveTitle(/${escapeForRegex(page.title)}/i);`);
+  }
+
+  const primaryHeading = page.headingOutline[0];
+  if (primaryHeading?.text) {
+    const headingRegex = escapeForRegex(primaryHeading.text);
+    const level = primaryHeading.level ?? 1;
+    steps.push(`await expect(page.getByRole('heading', { level: ${level}, name: /${headingRegex}/i })).toBeVisible();`);
+  }
+
+  if (navRefs[0]) {
+    const navRegex = escapeForRegex(navRefs[0].itemLabel);
+    steps.push(`await expect(page.getByRole('link', { name: /${navRegex}/i })).toBeVisible();`);
+  }
+
+  if (personaTag) {
+    steps.push(`// Persona focus: ${personaTag}.`);
+  }
+
+  if (goalSummary) {
+    steps.push(`// Goal: ${toSentenceCase(goalSummary)}.`);
+  }
+
+  if (page.forms.length > 0) {
+    const primaryForm = page.forms[0];
+    const fieldHints = primaryForm.fields
+      .map((field) => field.label?.trim() || field.name || field.type)
+      .filter((value, index, array) => value && array.indexOf(value) === index)
+      .slice(0, 4);
+    if (fieldHints.length > 0) {
+      steps.push(`// Detected form fields: ${fieldHints.join(', ')}.`);
+    }
+  }
+
+  if (kind === 'authentication') {
+    steps.push('// TODO: Provide authentication credentials (e.g., TEST_EMAIL / TEST_PASSWORD) before running this scenario.');
+  }
+
+  if (primaryCtaLabel) {
+    const ctaRegex = escapeForRegex(primaryCtaLabel);
+    steps.push(`const cta = page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }));`);
+    steps.push('await expect(cta).toBeVisible();');
+    steps.push('await cta.click();');
+  }
+
+  if (kind === 'complex' && page.forms.length > 0) {
+    steps.push('// TODO: Fill in the required form fields and submit the form.');
+  }
+
+  if (supportingPages.length > 0) {
+    const targetUrl = supportingPages[0];
+    const urlRegex = escapeForRegex(targetUrl);
+    steps.push('// Verify navigation after performing the primary action.');
+    steps.push(`await expect(page).toHaveURL(/${urlRegex}/); // adjust expected destination if necessary`);
+  }
+
+  return Array.from(new Set(steps));
+};
+
 const selectPrimaryCtaLabel = (ctas: readonly string[]): string | undefined => {
   if (ctas.length === 0) {
     return undefined;
@@ -472,6 +571,15 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
     }
 
     const supporting = crawl.edges.get(page.url) ?? [];
+    const outline = buildPlaywrightOutline({
+      page,
+      kind,
+      navRefs,
+      primaryCtaLabel,
+      personaTag,
+      goalSummary,
+      supportingPages: supporting,
+    });
 
     const story: UserStory = {
       id: buildId(page, kind),
@@ -482,6 +590,7 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       suggestedScriptName: deriveScriptName(page, kind, navRefs, primaryCtaLabel),
       supportingPages: supporting.slice(0, 5),
       primaryCtaLabel,
+      playwrightOutline: outline,
     };
 
     grouped[kind].push(story);
