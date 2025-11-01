@@ -43,6 +43,7 @@
 
 ### Latest Implementation Notes
 - Navigation-driven scoring and persona/goal detection now power `user-stories.json`, enriching each suggestion with CTA intent and audience hints.
+- CTA labels are captured from interactive elements, normalised (including fixes for broken spacing/accents), and surfaced as `primaryCtaLabel` for downstream scripting.
 
 ## Developer Feedback Loop
 - Prompt for additional context (credentials, data seeds) when flows appear gated or ambiguous.

@@ -1,6 +1,6 @@
 // This file implements the Playwright-powered crawler that maps a website into structured page summaries.
 
-import { chromium, HTTPResponse, Page } from 'playwright';
+import { chromium, Page, Response as PlaywrightResponse } from 'playwright';
 
 import type {
   BreadcrumbEntry,
@@ -30,6 +30,7 @@ interface DomExtractionResult {
   readonly schemaOrgTypes: readonly string[];
   readonly metaDescription?: string;
   readonly primaryKeywords: readonly string[];
+  readonly primaryCtas: readonly string[];
 }
 
 const DEFAULT_MAX_PAGES = 40;
@@ -65,7 +66,7 @@ export const crawlSite = async ({
       logger.info(`Crawling ${url}`);
 
       const page = await context.newPage();
-      let response: HTTPResponse | null = null;
+      let response: PlaywrightResponse | null = null;
 
       try {
         response = await page.goto(url, {
@@ -111,6 +112,7 @@ export const crawlSite = async ({
           schemaOrgTypes: domData.schemaOrgTypes,
           metaDescription: domData.metaDescription,
           primaryKeywords: domData.primaryKeywords,
+          primaryCtas: domData.primaryCtas,
         };
         pages.set(url, pageSummary);
 

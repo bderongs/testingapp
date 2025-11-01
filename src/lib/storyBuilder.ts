@@ -9,6 +9,18 @@ const STORY_LIMIT_PER_KIND = 3;
 
 const AUTH_KEYWORDS = ['login', 'log in', 'sign in', 'connexion'];
 const CTA_KEYWORDS = ['pricing', 'price', 'contact', 'demo', 'start', 'signup', 'sign up', 'book', 'trial', 'quote'];
+const CTA_PREFERRED_KEYWORDS: Array<{ readonly terms: readonly string[]; readonly score: number }> = [
+  { terms: ['r?server', 'reserver', 'book'], score: 30 },
+  { terms: ['commencer', 'start', 'get started'], score: 24 },
+  { terms: ['essayer', 'try'], score: 22 },
+  { terms: ['acheter', 'buy', 'purchase'], score: 20 },
+  { terms: ['demander', 'request'], score: 18 },
+  { terms: ['s\'inscrire', 'inscrire', 'sign up', 'signup', 'register'], score: 18 },
+  { terms: ['continuer', 'continue'], score: 12 },
+  { terms: ['connexion', 'login', 'sign in'], score: 8 },
+];
+
+const CTA_PENALTY_KEYWORDS = ['connexion', 'login', 'sign in', 'sign-in'];
 const PERSONA_KEYWORDS: Record<string, readonly string[]> = {
   builders: ['developer', 'engineer', 'technical', 'api'],
   design: ['designer', 'ui', 'ux', 'creative'],
@@ -41,6 +53,7 @@ interface StoryCandidate {
   readonly navRefs: readonly NavReference[];
   readonly personaTag?: string;
   readonly goalSummary?: string;
+  readonly primaryCtaLabel?: string;
 }
 
 const toSlug = (input: string): string =>
@@ -88,7 +101,13 @@ const detectPersona = (page: PageSummary): string | undefined => {
 };
 
 const detectGoal = (page: PageSummary, navRefs: readonly NavReference[]): string | undefined => {
-  const textSources = [page.title, page.metaDescription ?? '', ...page.primaryKeywords, ...navRefs.map((ref) => ref.itemLabel)];
+  const textSources = [
+    page.title,
+    page.metaDescription ?? '',
+    ...page.primaryKeywords,
+    ...navRefs.map((ref) => ref.itemLabel),
+    ...page.primaryCtas,
+  ];
   const haystack = textSources.join(' ').toLowerCase();
 
   if (haystack.includes('pricing') || haystack.includes('plans')) {
@@ -160,7 +179,12 @@ const pickStoryKind = (page: PageSummary, navRefs: readonly NavReference[]): Sto
     return 'complex';
   }
 
-  const ctaTextCandidates = [normalizedTitle, ...page.primaryKeywords.map((keyword) => keyword.toLowerCase()), ...navRefs.map((ref) => ref.itemLabel.toLowerCase())];
+  const ctaTextCandidates = [
+    normalizedTitle,
+    ...page.primaryKeywords.map((keyword) => keyword.toLowerCase()),
+    ...navRefs.map((ref) => ref.itemLabel.toLowerCase()),
+    ...page.primaryCtas.map((cta) => cta.toLowerCase()),
+  ];
   const hasCtaCue = CTA_KEYWORDS.some((keyword) => ctaTextCandidates.some((candidate) => candidate.includes(keyword)));
 
   if (hasCtaCue || page.interactiveElementCount >= 3 || forms.length > 0) {
@@ -170,7 +194,13 @@ const pickStoryKind = (page: PageSummary, navRefs: readonly NavReference[]): Sto
   return 'browsing';
 };
 
-const computeScore = (page: PageSummary, kind: StoryKind, navRefs: readonly NavReference[], personaTag?: string): number => {
+const computeScore = (
+  page: PageSummary,
+  kind: StoryKind,
+  navRefs: readonly NavReference[],
+  personaTag?: string,
+  primaryCtaLabel?: string
+): number => {
   let score = 0;
 
   if (navRefs.length > 0) {
@@ -199,7 +229,7 @@ const computeScore = (page: PageSummary, kind: StoryKind, navRefs: readonly NavR
   }
 
   const ctaMatches = CTA_KEYWORDS.filter((keyword) =>
-    [page.title, ...page.primaryKeywords].some((value) => value.toLowerCase().includes(keyword))
+    [page.title, ...page.primaryKeywords, ...page.primaryCtas].some((value) => value.toLowerCase().includes(keyword))
   );
   if (ctaMatches.length > 0) {
     score += 18;
@@ -207,6 +237,10 @@ const computeScore = (page: PageSummary, kind: StoryKind, navRefs: readonly NavR
 
   if (personaTag) {
     score += 8;
+  }
+
+  if (primaryCtaLabel) {
+    score += 10;
   }
 
   score += Math.min(page.interactiveElementCount, 10);
@@ -219,13 +253,15 @@ const buildDescription = (
   kind: StoryKind,
   navRefs: readonly NavReference[],
   personaTag: string | undefined,
-  goal: string | undefined
+  goal: string | undefined,
+  primaryCtaLabel: string | undefined
 ): string => {
   const navHint = navRefs[0]
     ? ` via ${navRefs[0].path}`
     : '';
   const personaHint = personaTag ? ` for ${personaTag} personas` : '';
   const goalHint = goal ? ` to ${goal}` : '';
+  const ctaHint = primaryCtaLabel ? ` using the "${primaryCtaLabel}" CTA` : '';
 
   const pageLabel = page.title || page.url;
 
@@ -233,20 +269,153 @@ const buildDescription = (
     case 'authentication':
       return `Validate authentication on ${pageLabel}${navHint}${personaHint}, ensuring login works with provided test credentials${goalHint}.`;
     case 'complex':
-      return `Complete the key form on ${pageLabel}${navHint}${personaHint}, filling mandatory fields and submitting${goalHint}.`;
+      return `Complete the key form on ${pageLabel}${navHint}${personaHint}, filling mandatory fields and submitting${goalHint}${ctaHint}.`;
     case 'interaction':
-      return `Exercise the primary CTA on ${pageLabel}${navHint}${personaHint}${goalHint}, confirming interactive elements behave as expected.`;
+      return `Exercise the primary CTA on ${pageLabel}${navHint}${personaHint}${goalHint}${ctaHint}, confirming interactive elements behave as expected.`;
     case 'browsing':
     default:
       return `Navigate through ${pageLabel}${navHint}${personaHint}${goalHint}, verifying the content loads and links resolve.`;
   }
 };
 
-const deriveScriptName = (page: PageSummary, kind: StoryKind, navRefs: readonly NavReference[]): string => {
+const deriveScriptName = (page: PageSummary, kind: StoryKind, navRefs: readonly NavReference[], primaryCtaLabel?: string): string => {
   const fallback = page.title || page.url.split('/').filter(Boolean).pop() || 'story';
-  const primaryLabel = navRefs[0]?.itemLabel ?? fallback;
+  const primaryLabel = primaryCtaLabel ?? navRefs[0]?.itemLabel ?? fallback;
   const slug = toSlug(primaryLabel);
   return `${kind}-${slug || 'flow'}`;
+};
+
+const selectPrimaryCtaLabel = (ctas: readonly string[]): string | undefined => {
+  if (ctas.length === 0) {
+    return undefined;
+  }
+
+  let bestLabel: string | undefined;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  ctas.forEach((label, index) => {
+    const repairLabel = (input: string): string => {
+      const trimmed = input.replace(/[\u200B-\u200D\u2060]/g, '').trim();
+      const collapsed = trimmed.replace(/\s+/g, '');
+      const folded = collapsed.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+      if (folded === 'reserver' || folded === 'reerver') {
+        return '\u0052\u00E9server';
+      }
+
+      if (folded === 'poserunequestion' || folded === 'poerunequetion') {
+        return 'Poser une question';
+      }
+
+      return trimmed;
+    };
+
+    let normalized = repairLabel(label.trim());
+    normalized = normalized.replace(/[\u200B-\u200D\u2060]/g, '');
+    if (!normalized) {
+      return;
+    }
+
+    let score = 0;
+    let canonicalLabel: string | undefined;
+
+    const lower = normalized.toLowerCase();
+    const accentFolded = lower.normalize('NFD').replace(/\p{M}/gu, '');
+    const collapsed = accentFolded.replace(/\s+/g, '');
+
+    const approxContains = (haystack: string, needle: string): boolean => {
+      if (haystack.includes(needle) || needle.includes(haystack)) {
+        return true;
+      }
+
+      if (needle.length === haystack.length + 1) {
+        for (let i = 0; i < needle.length; i += 1) {
+          const candidate = needle.slice(0, i) + needle.slice(i + 1);
+          if (candidate === haystack) {
+            return true;
+          }
+        }
+      }
+
+      if (haystack.length === needle.length + 1) {
+        for (let i = 0; i < haystack.length; i += 1) {
+          const candidate = haystack.slice(0, i) + haystack.slice(i + 1);
+          if (candidate === needle) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    };
+
+    CTA_PREFERRED_KEYWORDS.forEach(({ terms, score: boost }) => {
+      let matchedTerm: string | undefined;
+      const matched = terms.some((term) => {
+        const termLower = term.toLowerCase();
+        const foldedTerm = termLower.normalize('NFD').replace(/\p{M}/gu, '');
+        const foldedCollapsedTerm = foldedTerm.replace(/\s+/g, '');
+        const found =
+          lower.includes(termLower) ||
+          accentFolded.includes(foldedTerm) ||
+          collapsed.includes(foldedCollapsedTerm) ||
+          approxContains(collapsed, foldedCollapsedTerm);
+        if (found) {
+          matchedTerm = term;
+        }
+        return found;
+      });
+      if (matched) {
+        score += boost;
+        if (!canonicalLabel && matchedTerm) {
+          canonicalLabel = matchedTerm;
+        }
+      }
+    });
+
+    if (CTA_PENALTY_KEYWORDS.some((term) => {
+      const folded = term.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+      const foldedCollapsed = folded.replace(/\s+/g, '');
+      return (
+        lower.includes(term.toLowerCase()) ||
+        accentFolded.includes(folded) ||
+        collapsed.includes(foldedCollapsed) ||
+        approxContains(collapsed, foldedCollapsed)
+      );
+    })) {
+      score -= 6;
+    }
+
+    const wordCount = normalized.split(/\s+/).length;
+    if (wordCount <= 4) {
+      score += 6;
+    }
+
+    if (normalized.length >= 4 && normalized.length <= 24) {
+      score += 4;
+    }
+
+    // Slight preference for first encountered CTA when scores tie.
+    score -= index * 0.1;
+
+    const prettify = (input: string): string =>
+      input
+        .split(' ')
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+    const shouldOverride = canonicalLabel ? !lower.includes(canonicalLabel.toLowerCase()) : false;
+    let displayLabel = shouldOverride && canonicalLabel ? prettify(canonicalLabel) : normalized;
+    displayLabel = displayLabel.replace(/Reserver/g, '\u0052\u00E9server');
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestLabel = displayLabel;
+    }
+  });
+
+  return bestLabel ?? ctas[0];
 };
 
 const buildId = (page: PageSummary, kind: StoryKind): string => {
@@ -265,7 +434,8 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
     const kind = pickStoryKind(page, navRefs);
     const persona = detectPersona(page);
     const goal = detectGoal(page, navRefs);
-    const score = computeScore(page, kind, navRefs, persona);
+    const primaryCtaLabel = selectPrimaryCtaLabel(page.primaryCtas);
+    const score = computeScore(page, kind, navRefs, persona, primaryCtaLabel);
 
     candidates.push({
       page,
@@ -274,6 +444,7 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       navRefs,
       personaTag: persona,
       goalSummary: goal,
+      primaryCtaLabel,
     });
   }
 
@@ -289,7 +460,7 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
   const selectedUrls = new Set<string>();
 
   for (const candidate of candidates) {
-    const { page, kind, navRefs, personaTag, goalSummary } = candidate;
+    const { page, kind, navRefs, personaTag, goalSummary, primaryCtaLabel } = candidate;
     const normalizedUrl = normalizeUrl(page.url);
 
     if (selectedUrls.has(`${normalizedUrl}-${kind}`)) {
@@ -307,9 +478,10 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       kind,
       title: page.title || page.url,
       entryUrl: page.url,
-      description: buildDescription(page, kind, navRefs, personaTag, goalSummary),
-      suggestedScriptName: deriveScriptName(page, kind, navRefs),
+      description: buildDescription(page, kind, navRefs, personaTag, goalSummary, primaryCtaLabel),
+      suggestedScriptName: deriveScriptName(page, kind, navRefs, primaryCtaLabel),
       supportingPages: supporting.slice(0, 5),
+      primaryCtaLabel,
     };
 
     grouped[kind].push(story);

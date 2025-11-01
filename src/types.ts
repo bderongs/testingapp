@@ -66,6 +66,7 @@ export interface PageSummary {
   readonly schemaOrgTypes: readonly string[];
   readonly metaDescription?: string;
   readonly primaryKeywords: readonly string[];
+  readonly primaryCtas: readonly string[];
 }
 
 export interface CrawlResult {
@@ -82,6 +83,7 @@ export interface UserStory {
   readonly description: string;
   readonly suggestedScriptName: string;
   readonly supportingPages: readonly string[];
+  readonly primaryCtaLabel?: string;
 }
 
 export interface AuditArtifacts {

@@ -1,5 +1,4 @@
 // This file holds the plain JavaScript snippet executed inside the page context to extract structured metadata.
-
 export const DOM_EXTRACTION_SOURCE = `
 (() => {
   const anchors = Array.from(document.querySelectorAll('a[href]'));
