@@ -39,11 +39,14 @@ const defaultSummary = (): StorySummary => ({
   pageCount: 0,
 });
 
-const readJson = async <T>(filePath: string): Promise<T | null> => {
+const readJson = async <T>(filePath: string, label: string): Promise<T | null> => {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(raw) as T;
-  } catch {
+    const parsed = JSON.parse(raw) as T;
+    console.info(`[storyData] Loaded ${label} (${filePath})`);
+    return parsed;
+  } catch (error) {
+    console.warn(`[storyData] Failed to load ${label} (${filePath}):`, (error as Error).message);
     return null;
   }
 };
@@ -66,10 +69,16 @@ const buildSpecMetadata = (story: UserStory): { specSlug: string; specHref: stri
 };
 
 export const loadDashboardData = async (): Promise<DashboardData> => {
-  const stories = (await readJson<UserStory[]>(STORIES_FILE)) ?? [];
+  const stories = (await readJson<UserStory[]>(STORIES_FILE, 'stories')) ?? [];
   const siteMap =
-    (await readJson<{ baseUrl: string; pages: Array<{ url: string }>; edges: Array<{ source: string; targets: string[] }>; }>(SITE_MAP_FILE)) ??
+    (await readJson<{ baseUrl: string; pages: Array<{ url: string }>; edges: Array<{ source: string; targets: string[] }>; }>(
+      SITE_MAP_FILE,
+      'site-map'
+    )) ??
     { baseUrl: 'Unknown source', pages: [], edges: [] };
+
+  console.info('[storyData] Story count', stories.length);
+
 
   const summary = stories.reduce<StorySummary>((acc, story) => {
     acc.byKind[story.kind] += 1;
