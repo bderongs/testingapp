@@ -13,14 +13,19 @@ Sparkier Web Auditor is an early prototype that crawls a target website, builds 
    npm install
    npx playwright install
    ```
-2. Run the crawler in development mode:
+2. Run the CLI crawler manually (optional):
    ```bash
-   npm run dev -- --url=https://example.com --max-pages=30
+   npm run dev:cli -- --url=https://example.com --max-pages=30
    ```
    Adjust flags as needed:
    - `--max-pages` (default 40) controls crawl breadth.
    - `--same-origin-only=false` allows stepping into sub-domains or external links.
    - `--navigation-timeout=15000` sets the load timeout in milliseconds.
+3. Launch the web dashboard:
+   ```bash
+   npm run dev
+   ```
+   Open http://localhost:3000/brand to view regression analytics, trigger new crawls, and download Playwright spec skeletons.
 
 ## Outputs
 

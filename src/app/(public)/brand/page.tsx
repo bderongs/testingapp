@@ -3,6 +3,7 @@ import { Activity, Layers, ShieldCheck, Timer } from 'lucide-react';
 import Link from 'next/link';
 
 import { loadDashboardData } from '@/lib/storyData';
+import { CrawlLauncher } from '@/components/ui/crawl-launcher';
 import { MetricsCard } from '@/components/ui/metrics-card';
 import { SectionTitle } from '@/components/ui/section-title';
 import { StoryCard } from '@/components/ui/story-card';
@@ -31,6 +32,9 @@ export default async function BrandPage(): Promise<JSX.Element> {
         <MetricsCard icon={Activity} label="Unverified" value={data.summary.unverified.toString()} tone="warning" />
         <MetricsCard icon={Layers} label="Pages Crawled" value={data.summary.pageCount.toString()} tone="muted" />
       </section>
+
+      <SectionTitle title="Run a Crawl" subtitle="Trigger the CLI without leaving the dashboard. Results refresh automatically when the crawl completes." />
+      <CrawlLauncher defaultUrl={data.baseUrl === 'Unknown source' ? 'https://www.sparkier.io' : data.baseUrl} />
 
       <SectionTitle title="User Stories" subtitle="Drill into each flow to view expected outcomes, assertions, and generated Playwright steps." />
 
