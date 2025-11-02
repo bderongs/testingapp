@@ -2,6 +2,9 @@
 import { Activity, Layers, ShieldCheck, Timer } from 'lucide-react';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { loadDashboardData } from '@/lib/storyData';
 import { CrawlLauncher } from '@/components/ui/crawl-launcher';
 import { MetricsCard } from '@/components/ui/metrics-card';
