@@ -1,5 +1,5 @@
 // This file loads crawl output from the filesystem and prepares dashboard-ready data structures.
-import { promises as fs, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { StoryKind, UserStory } from '@/types';
@@ -41,7 +41,7 @@ const defaultSummary = (): StorySummary => ({
 
 const readJson = async <T>(filePath: string, label: string): Promise<T | null> => {
   try {
-    const raw = await fs.readFile(filePath, 'utf8');
+    const raw = await readFile(filePath, 'utf8');
     const parsed = JSON.parse(raw) as T;
     console.info(`[storyData] Loaded ${label} (${filePath})`);
     return parsed;
