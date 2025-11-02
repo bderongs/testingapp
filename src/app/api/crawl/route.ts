@@ -1,6 +1,7 @@
 // This file exposes an API endpoint that runs the Sparkier CLI crawler from the Next.js UI.
 import { spawn } from 'node:child_process';
 
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -60,6 +61,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 500 }
     );
   }
+
+  revalidatePath('/brand');
+  revalidatePath('/');
 
   return NextResponse.json({
     success: true,
