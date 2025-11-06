@@ -30,8 +30,40 @@ const getOpenAIClient = async () => {
   return new OpenAI({ apiKey });
 };
 
-const SPEC_DIR = join(process.cwd(), 'output', 'playwright');
-const STORIES_FILE = join(process.cwd(), 'output', 'user-stories.json');
+const OUTPUT_DIR = join(process.cwd(), 'output');
+const SPEC_DIR = join(OUTPUT_DIR, 'playwright');
+const STORIES_FILE = join(OUTPUT_DIR, 'user-stories.json');
+
+/**
+ * Finds the most recent crawl ID by scanning output directories.
+ */
+const findLatestCrawlId = async (): Promise<string | null> => {
+  try {
+    const { readdir, stat } = await import('node:fs/promises');
+    const entries = await readdir(OUTPUT_DIR, { withFileTypes: true });
+    const crawlDirs = entries.filter((entry) => entry.isDirectory() && entry.name !== 'playwright');
+    
+    let latestCrawlId: string | null = null;
+    let latestTime = 0;
+
+    for (const dir of crawlDirs) {
+      const storiesFile = join(OUTPUT_DIR, dir.name, 'user-stories.json');
+      try {
+        const stats = await stat(storiesFile);
+        if (stats.mtimeMs > latestTime) {
+          latestTime = stats.mtimeMs;
+          latestCrawlId = dir.name;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return latestCrawlId;
+  } catch {
+    return null;
+  }
+};
 const BACKUP_DIR = join(process.cwd(), 'output', 'playwright', '.backups');
 
 const ensureBackupDir = async (): Promise<void> => {
@@ -78,7 +110,16 @@ export async function POST(
 
   const resolvedParams = await params;
   const slug = resolvedParams.slug.replace(/[^a-z0-9-]/g, '');
-  const specFile = join(SPEC_DIR, `${slug}.spec.ts`);
+  
+  // Get crawlId from query parameter or use latest crawl
+  const url = new URL(request.url);
+  const crawlIdParam = url.searchParams.get('crawlId');
+  const crawlId = crawlIdParam || await findLatestCrawlId();
+  
+  // Determine which directory to use
+  const crawlDir = crawlId ? join(OUTPUT_DIR, crawlId) : OUTPUT_DIR;
+  const specDir = crawlId ? join(crawlDir, 'playwright') : SPEC_DIR;
+  const specFile = join(specDir, `${slug}.spec.ts`);
 
   try {
     // Validate request body
@@ -113,9 +154,19 @@ export async function POST(
       );
     }
 
+    // Get crawlId from query parameter or use latest crawl
+    const url = new URL(request.url);
+    const crawlIdParam = url.searchParams.get('crawlId');
+    const crawlId = crawlIdParam || await findLatestCrawlId();
+    
+    // Determine which directory to use
+    const crawlDir = crawlId ? join(OUTPUT_DIR, crawlId) : OUTPUT_DIR;
+    const storiesFile = crawlId ? join(crawlDir, 'user-stories.json') : STORIES_FILE;
+    const specDir = crawlId ? join(crawlDir, 'playwright') : SPEC_DIR;
+
     // Load user stories to get current assertions
     const stories = (await readJson<Array<{ suggestedScriptName: string; baselineAssertions: string[] }>>(
-      STORIES_FILE,
+      storiesFile,
       'stories'
     )) ?? [];
     
@@ -209,7 +260,8 @@ Provide the modified baseline assertions as a JSON array:`;
         return s;
       });
 
-      await writeFile(STORIES_FILE, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
+      const storiesFile = crawlId ? join(crawlDir, 'user-stories.json') : STORIES_FILE;
+      await writeFile(storiesFile, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
 
       // Regenerate Playwright code from updated assertions
       // Note: This is a simplified version - in production, you'd want to call the full storyBuilder

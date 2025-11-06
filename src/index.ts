@@ -47,6 +47,7 @@ const argsSchema = z.object({
   'max-pages': z.number().int().positive().max(200).optional(),
   'same-origin-only': z.boolean().optional(),
   'navigation-timeout': z.number().int().positive().optional(),
+  'crawl-id': z.string().optional(),
 });
 
 const mapArgsToOptions = (parsed: z.infer<typeof argsSchema>): CrawlOptions => ({
@@ -74,13 +75,14 @@ const main = async (): Promise<void> => {
   }
 
   const options = mapArgsToOptions(parseResult.data);
+  const crawlId = parseResult.data['crawl-id'];
 
-  logger.info(`Starting crawl for ${options.baseUrl}`);
+  logger.info(`Starting crawl for ${options.baseUrl}${crawlId ? ` (crawl ID: ${crawlId})` : ''}`);
 
   const crawl = await crawlSite(options);
   const userStories = identifyUserStories(crawl);
 
-  await persistArtifacts({ crawl, userStories });
+  await persistArtifacts({ crawl, userStories }, crawlId);
 
   logger.info(`Crawl complete. ${crawl.pages.size} page(s) mapped.`);
   logger.info(`Identified ${userStories.length} user stor${userStories.length === 1 ? 'y' : 'ies'}.`);

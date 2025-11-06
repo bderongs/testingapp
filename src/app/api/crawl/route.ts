@@ -5,6 +5,12 @@ import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import {
+  createCrawlSession,
+  completeCrawlSession,
+  getCrawlSession,
+} from '@/lib/crawlManager';
+
 export const runtime = 'nodejs';
 
 const requestSchema = z.object({
@@ -13,9 +19,15 @@ const requestSchema = z.object({
   sameOriginOnly: z.boolean().optional(),
 });
 
-const runCrawler = (args: string[]): Promise<{ code: number; output: string }> =>
+const runCrawler = (
+  args: string[],
+  crawlId: string
+): Promise<{ code: number; output: string }> =>
   new Promise((resolve) => {
-    const child = spawn('npm', ['run', 'dev:cli', '--', ...args], { cwd: process.cwd(), shell: process.platform === 'win32' });
+    const child = spawn('npm', ['run', 'dev:cli', '--', ...args, `--crawl-id=${crawlId}`], {
+      cwd: process.cwd(),
+      shell: process.platform === 'win32',
+    });
     let output = '';
 
     child.stdout.on('data', (chunk) => {
@@ -47,27 +59,54 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const { url, maxPages = 10, sameOriginOnly = true } = parse.data;
-  const args = [`--url=${url}`, `--max-pages=${maxPages}`, `--same-origin-only=${sameOriginOnly}`];
 
-  const { code, output } = await runCrawler(args);
+  // Create crawl session and check if queued
+  const sessionResult = createCrawlSession(url, maxPages, sameOriginOnly);
 
-  if (code !== 0) {
+  if (!sessionResult) {
     return NextResponse.json(
       {
         success: false,
-        message: 'Crawler failed. Review the output for details.',
-        output,
+        message: 'Unable to create crawl session. Please try again later.',
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 
-  revalidatePath('/brand');
-  revalidatePath('/');
+  const { session, queued } = sessionResult;
+
+  // If queued, return immediately with the crawl ID
+  if (queued) {
+    return NextResponse.json({
+      success: true,
+      message: 'Crawl queued. It will start automatically when a slot becomes available.',
+      crawlId: session.id,
+      queued: true,
+      status: 'pending',
+    });
+  }
+
+  // Run crawler asynchronously
+  runCrawler(
+    [`--url=${url}`, `--max-pages=${maxPages}`, `--same-origin-only=${sameOriginOnly}`],
+    session.id
+  )
+    .then(({ code, output }) => {
+      if (code !== 0) {
+        completeCrawlSession(session.id, false, output);
+      } else {
+        completeCrawlSession(session.id, true);
+      }
+    })
+    .catch((error) => {
+      completeCrawlSession(session.id, false, (error as Error).message);
+    });
 
   return NextResponse.json({
     success: true,
-    message: 'Crawler completed successfully. Refreshing dashboard?',
-    output,
+    message: 'Crawl started successfully.',
+    crawlId: session.id,
+    queued: false,
+    status: 'running',
   });
 }

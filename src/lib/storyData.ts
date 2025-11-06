@@ -1,5 +1,5 @@
 // This file loads crawl output from the filesystem and prepares dashboard-ready data structures.
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, stat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { StoryKind, UserStory } from '@/types';
@@ -64,9 +64,9 @@ const readJson = async <T>(filePath: string, label: string): Promise<T | null> =
   }
 };
 
-const getGeneratedAtLabel = async (): Promise<string> => {
+const getGeneratedAtLabel = async (crawlDir: string, storiesFile: string): Promise<string> => {
   try {
-    const fileStat = await stat(STORIES_FILE);
+    const fileStat = await stat(storiesFile);
     return `Generated ${fileStat.mtime.toLocaleString()}`;
   } catch {
     return 'No crawl artifacts detected';
@@ -81,11 +81,59 @@ const buildSpecMetadata = (story: UserStory): { specSlug: string; specHref: stri
   };
 };
 
-export const loadDashboardData = async (): Promise<DashboardData> => {
-  const stories = (await readJson<UserStory[]>(STORIES_FILE, 'stories')) ?? [];
+/**
+ * Finds the most recent crawl ID by scanning output directories.
+ * Returns the crawlId of the directory with the most recent user-stories.json file.
+ */
+const findLatestCrawlId = async (): Promise<string | null> => {
+  try {
+    const entries = await readdir(OUTPUT_DIR, { withFileTypes: true });
+    const crawlDirs = entries.filter((entry) => entry.isDirectory() && entry.name !== 'playwright');
+    
+    let latestCrawlId: string | null = null;
+    let latestTime = 0;
+
+    for (const dir of crawlDirs) {
+      const storiesFile = join(OUTPUT_DIR, dir.name, 'user-stories.json');
+      try {
+        const stats = await stat(storiesFile);
+        if (stats.mtimeMs > latestTime) {
+          latestTime = stats.mtimeMs;
+          latestCrawlId = dir.name;
+        }
+      } catch {
+        // File doesn't exist, skip this directory
+        continue;
+      }
+    }
+
+    return latestCrawlId;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Loads dashboard data from a specific crawl ID or from the most recent crawl.
+ * If crawlId is provided, loads from output/{crawlId}/.
+ * If no crawlId is provided, finds and loads the most recent crawl.
+ * Falls back to output/ (legacy mode) if no crawl directories are found.
+ */
+export const loadDashboardData = async (crawlId?: string): Promise<DashboardData> => {
+  // If no crawlId provided, find the latest crawl
+  let targetCrawlId = crawlId;
+  if (!targetCrawlId) {
+    targetCrawlId = await findLatestCrawlId() || undefined;
+  }
+
+  const crawlDir = targetCrawlId ? join(OUTPUT_DIR, targetCrawlId) : OUTPUT_DIR;
+  const storiesFile = join(crawlDir, 'user-stories.json');
+  const siteMapFile = join(crawlDir, 'site-map.json');
+
+  const stories = (await readJson<UserStory[]>(storiesFile, 'stories')) ?? [];
   const siteMap =
     (await readJson<{ baseUrl: string; pages: Array<{ url: string }>; edges: Array<{ source: string; targets: string[] }>; }>(
-      SITE_MAP_FILE,
+      siteMapFile,
       'site-map'
     )) ??
     { baseUrl: 'Unknown source', pages: [], edges: [] };
@@ -242,7 +290,7 @@ export const loadDashboardData = async (): Promise<DashboardData> => {
   return {
     baseUrl: siteMap.baseUrl,
     storyCount: stories.length,
-    generatedAtLabel: await getGeneratedAtLabel(),
+    generatedAtLabel: await getGeneratedAtLabel(crawlDir, storiesFile),
     summary,
     stories: sortedStories.map((story) => ({
       ...story,

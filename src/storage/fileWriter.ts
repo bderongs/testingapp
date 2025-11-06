@@ -9,8 +9,16 @@ import { persistSpecs } from './specWriter';
 
 const OUTPUT_DIR = 'output';
 
-export const persistArtifacts = async (artifacts: AuditArtifacts): Promise<void> => {
-  await mkdir(OUTPUT_DIR, { recursive: true });
+/**
+ * Persists crawl artifacts to isolated directories based on crawlId.
+ * If crawlId is provided, files are stored in output/{crawlId}/, otherwise in output/ (legacy mode).
+ */
+export const persistArtifacts = async (
+  artifacts: AuditArtifacts,
+  crawlId?: string
+): Promise<void> => {
+  const crawlDir = crawlId ? join(OUTPUT_DIR, crawlId) : OUTPUT_DIR;
+  await mkdir(crawlDir, { recursive: true });
 
   const crawlPayload = JSON.stringify(
     {
@@ -25,11 +33,14 @@ export const persistArtifacts = async (artifacts: AuditArtifacts): Promise<void>
   const storiesPayload = JSON.stringify(artifacts.userStories, null, 2);
 
   await Promise.all([
-    writeFile(join(OUTPUT_DIR, 'site-map.json'), `${crawlPayload}\n`),
-    writeFile(join(OUTPUT_DIR, 'user-stories.json'), `${storiesPayload}\n`),
+    writeFile(join(crawlDir, 'site-map.json'), `${crawlPayload}\n`),
+    writeFile(join(crawlDir, 'user-stories.json'), `${storiesPayload}\n`),
   ]);
 
-  logger.info(`Artifacts saved to ${OUTPUT_DIR}/site-map.json and ${OUTPUT_DIR}/user-stories.json`);
+  logger.info(
+    `Artifacts saved to ${crawlDir}/site-map.json and ${crawlDir}/user-stories.json`
+  );
 
-  await persistSpecs(artifacts.userStories);
+  const specsDir = crawlId ? join(crawlDir, 'playwright') : join(OUTPUT_DIR, 'playwright');
+  await persistSpecs(artifacts.userStories, specsDir);
 };

@@ -10,6 +10,7 @@ interface TestEditModalProps {
   specSlug: string;
   storyTitle: string;
   baselineAssertions: readonly string[];
+  crawlId?: string;
 }
 
 interface EditResponse {
@@ -21,7 +22,7 @@ interface EditResponse {
   backupPath?: string;
 }
 
-export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineAssertions }: TestEditModalProps) => {
+export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineAssertions, crawlId }: TestEditModalProps) => {
   const [instruction, setInstruction] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [preview, setPreview] = useState<EditResponse | null>(null);
@@ -56,7 +57,11 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
     setPreview(null);
 
     try {
-      const response = await fetch(`/api/test/${specSlug}/edit`, {
+      const url = new URL(`/api/test/${specSlug}/edit`, window.location.origin);
+      if (crawlId) {
+        url.searchParams.set('crawlId', crawlId);
+      }
+      const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction: instruction.trim(), apply: false, baselineAssertions }),
@@ -82,7 +87,11 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
     setError(null);
 
     try {
-      const response = await fetch(`/api/test/${specSlug}/edit`, {
+      const url = new URL(`/api/test/${specSlug}/edit`, window.location.origin);
+      if (crawlId) {
+        url.searchParams.set('crawlId', crawlId);
+      }
+      const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction: instruction.trim(), apply: true, baselineAssertions: preview.modified }),

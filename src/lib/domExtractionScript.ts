@@ -193,17 +193,88 @@ export const DOM_EXTRACTION_SOURCE = `
     return { label, items };
   });
 
+  // Helper to check if element is visible
+  const isElementVisible = (element) => {
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      return false;
+    }
+    // Check if element is in viewport or at least partially visible
+    const isInViewport = rect.top < window.innerHeight && rect.bottom > 0;
+    // Also check if it's not in a hidden container (like a closed modal)
+    const isInHiddenContainer = element.closest('[style*="display: none"], [style*="visibility: hidden"]') !== null;
+    return isInViewport && !isInHiddenContainer;
+  };
+
+  // Helper to check if element is in main content area
+  const isInMainContent = (element) => {
+    const mainContent = document.querySelector('main, [role="main"], article, [role="article"]');
+    if (!mainContent) {
+      return true; // If no main content area, consider all headings as valid
+    }
+    return mainContent.contains(element);
+  };
+
+  // Helper to check if element is in header/footer (usually not primary content)
+  const isInHeaderOrFooter = (element) => {
+    return element.closest('header, footer, [role="banner"], [role="contentinfo"]') !== null;
+  };
+
   const headingElements = Array.from(document.querySelectorAll('h1, h2, h3, h4'));
   const headingOutline = headingElements
+    .filter((heading) => {
+      // Filter out headings that are not visible
+      if (!isElementVisible(heading)) {
+        return false;
+      }
+      // Prefer headings in main content, but don't exclude others completely
+      // (some pages don't have a main tag)
+      return true;
+    })
     .map((heading) => {
       const level = Number.parseInt(heading.tagName.replace('H', ''), 10);
       const text = heading.innerText.trim();
       if (!text) {
         return null;
       }
-      return { level, text, id: heading.id || undefined };
+      const inMain = isInMainContent(heading);
+      const inHeaderFooter = isInHeaderOrFooter(heading);
+      const rect = heading.getBoundingClientRect();
+      // Headings near the top of the page (first 2000px) are more likely to be primary
+      const isNearTop = rect.top >= 0 && rect.top < 2000;
+      // Calculate priority: main content + near top + h1 gets highest priority
+      let priority = 0;
+      if (inMain) priority += 10;
+      if (isNearTop) priority += 5;
+      if (level === 1) priority += 3;
+      if (inHeaderFooter) priority -= 5; // Penalize header/footer headings
+      
+      return { 
+        level, 
+        text, 
+        id: heading.id || undefined,
+        inMainContent: inMain,
+        inHeaderFooter: inHeaderFooter,
+        priority: priority
+      };
     })
-    .filter((entry) => Boolean(entry));
+    .filter((entry) => Boolean(entry))
+    // Sort by priority (main content first), then by level (h1 first), then by position
+    .sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority; // Higher priority first
+      }
+      if (a.level !== b.level) {
+        return a.level - b.level; // Lower level (h1) comes first
+      }
+      return 0; // Keep original order for same level
+    })
+    // Remove priority from final output (not needed in the result)
+    .map(({ priority, inMainContent, inHeaderFooter, ...rest }) => rest);
 
   const breadcrumbCandidates = Array.from(
     document.querySelectorAll(

@@ -18,6 +18,7 @@ interface StoryWithSpec extends UserStory {
 
 interface StoryCardProps {
   story: StoryWithSpec;
+  crawlId?: string;
 }
 
 const cardAccent: Record<UserStory['kind'], string> = {
@@ -42,7 +43,7 @@ interface TestResponse {
   assertionResults?: AssertionResult[];
 }
 
-export const StoryCard = ({ story }: StoryCardProps) => {
+export const StoryCard = ({ story, crawlId }: StoryCardProps) => {
   const [isRunningTest, setIsRunningTest] = useState(false);
   const [testResult, setTestResult] = useState<TestResponse | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,7 +54,11 @@ export const StoryCard = ({ story }: StoryCardProps) => {
 
     try {
       // Use assertions endpoint to validate each assertion individually
-      const response = await fetch(`/api/test/${story.specSlug}/assertions`, {
+      const url = new URL(`/api/test/${story.specSlug}/assertions`, window.location.origin);
+      if (crawlId) {
+        url.searchParams.set('crawlId', crawlId);
+      }
+      const response = await fetch(url.toString(), {
         method: 'POST',
       });
 
@@ -125,7 +130,7 @@ export const StoryCard = ({ story }: StoryCardProps) => {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
+      <div className="mt-6 space-y-6">
         <div className="space-y-3">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
             <Flag className="h-4 w-4 text-sparkier-primary" aria-hidden /> Expected Outcome
@@ -141,81 +146,72 @@ export const StoryCard = ({ story }: StoryCardProps) => {
             <ClipboardCheck className="h-4 w-4 text-sparkier-secondary" aria-hidden /> Baseline Assertions
           </h4>
           <ul className="space-y-2 text-sm text-slate-700">
-            {story.baselineAssertions.map((assertion) => (
-              <li key={sanitizeFileSlug(assertion, assertion)} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                {assertion}
-              </li>
-            ))}
+            {story.baselineAssertions.map((assertion, index) => {
+              // Find matching assertion result if test has run
+              // Match by index (assertion results are in the same order as baseline assertions)
+              const assertionResult = testResult?.assertionResults?.[index];
+              
+              return (
+                <li
+                  key={sanitizeFileSlug(assertion, assertion)}
+                  className={cn(
+                    'flex items-start gap-3 rounded-lg border p-3',
+                    assertionResult
+                      ? assertionResult.passed
+                        ? 'border-emerald-200 bg-emerald-50/50'
+                        : 'border-rose-200 bg-rose-50/50'
+                      : 'border-slate-200 bg-slate-50'
+                  )}
+                >
+                  {assertionResult && (
+                    <div className="flex-shrink-0 mt-0.5">
+                      {assertionResult.passed ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-rose-600" />
+                      )}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className={cn(
+                      'text-sm',
+                      assertionResult
+                        ? assertionResult.passed
+                          ? 'text-emerald-800'
+                          : 'text-rose-800'
+                        : 'text-slate-700'
+                    )}>
+                      {assertion}
+                    </p>
+                    {assertionResult && assertionResult.error && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-rose-600 hover:text-rose-700">
+                          View error details
+                        </summary>
+                        <p className="mt-1 rounded bg-rose-100/50 p-2 text-xs text-rose-800">
+                          {assertionResult.error}
+                        </p>
+                      </details>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <div>
-          <h4 className="mb-2 text-sm font-semibold text-slate-700">Playwright Outline</h4>
-          <pre className="max-h-64 overflow-auto rounded-lg border border-slate-200 bg-slate-900/95 p-4 text-xs text-slate-100">
-            {story.playwrightOutline.join('\n')}
-          </pre>
-        </div>
-        <div>
-          <h4 className="mb-2 text-sm font-semibold text-slate-700">Repeatability Notes</h4>
-          <ul className="space-y-2 text-sm text-slate-700">
-            {story.repeatabilityNotes.map((note) => (
-              <li key={sanitizeFileSlug(note, note)} className="rounded-lg border border-dashed border-slate-200 bg-white p-3">
-                {note}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {testResult && (
+      {testResult && testResult.message && (
         <div className="mt-6">
-          <h4 className="mb-3 text-sm font-semibold text-slate-700">Test Results</h4>
           <div
             className={cn(
-              'rounded-lg border p-4 text-sm',
+              'rounded-lg border p-3 text-sm',
               testResult.success ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-rose-300 bg-rose-50 text-rose-700'
             )}
           >
             <p className="font-semibold">{testResult.message}</p>
-            {testResult.error && <p className="mt-2 text-xs">{testResult.error}</p>}
-            
-            {testResult.assertionResults && testResult.assertionResults.length > 0 && (
-              <div className="mt-4 space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide opacity-75">Assertion Results</p>
-                {testResult.assertionResults.map((result, index) => (
-                  <div
-                    key={index}
-                    className={cn(
-                      'flex items-start gap-3 rounded-lg border p-3',
-                      result.passed
-                        ? 'border-emerald-200 bg-emerald-100/50'
-                        : 'border-rose-200 bg-rose-100/50'
-                    )}
-                  >
-                    <div className="flex-shrink-0 mt-0.5">
-                      {result.passed ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4 text-rose-600" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className={cn('text-xs', result.passed ? 'text-emerald-800' : 'text-rose-800')}>
-                        {result.assertion}
-                      </p>
-                      {result.error && <p className="mt-1 text-xs text-rose-600">{result.error}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {testResult.output && (
-              <pre className="mt-3 max-h-72 overflow-auto rounded bg-white/80 p-3 text-xs text-slate-800">
-                {testResult.output.trim()}
-              </pre>
+            {testResult.error && !testResult.assertionResults && (
+              <p className="mt-2 text-xs">{testResult.error}</p>
             )}
           </div>
         </div>
@@ -227,6 +223,7 @@ export const StoryCard = ({ story }: StoryCardProps) => {
         specSlug={story.specSlug}
         storyTitle={story.title}
         baselineAssertions={story.baselineAssertions}
+        crawlId={crawlId}
       />
     </article>
   );

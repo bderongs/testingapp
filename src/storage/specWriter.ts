@@ -7,7 +7,7 @@ import type { UserStory } from '../types';
 import { sanitizeFileSlug } from '../lib/sanitize';
 import { logger } from '../utils/logger';
 
-const OUTPUT_DIR = 'output/playwright';
+const DEFAULT_OUTPUT_DIR = 'output/playwright';
 
 const escapeForSingleQuote = (input: string): string => input.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
@@ -54,13 +54,20 @@ const buildSpecContent = (story: UserStory): string => {
   return specLines.join('\n');
 };
 
-export const persistSpecs = async (stories: readonly UserStory[]): Promise<void> => {
-  await mkdir(OUTPUT_DIR, { recursive: true });
+/**
+ * Persists Playwright spec files to the specified directory.
+ * If no directory is provided, uses the default output/playwright directory.
+ */
+export const persistSpecs = async (
+  stories: readonly UserStory[],
+  outputDir: string = DEFAULT_OUTPUT_DIR
+): Promise<void> => {
+  await mkdir(outputDir, { recursive: true });
 
   await Promise.all(
     stories.map(async (story) => {
       const fileName = `${sanitizeFileSlug(story.suggestedScriptName, story.id)}.spec.ts`;
-      const targetPath = join(OUTPUT_DIR, fileName);
+      const targetPath = join(outputDir, fileName);
       const content = buildSpecContent(story);
       await writeFile(targetPath, content);
       logger.info(`Generated Playwright spec skeleton at ${targetPath}`);

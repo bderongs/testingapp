@@ -14,6 +14,9 @@ interface CrawlResponse {
   success: boolean;
   message: string;
   output?: string;
+  crawlId?: string;
+  queued?: boolean;
+  status?: 'pending' | 'running' | 'completed' | 'failed';
 }
 
 export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
@@ -22,6 +25,99 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
   const [sameOriginOnly, setSameOriginOnly] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CrawlResponse | null>(null);
+
+  const pollCrawlStatus = async (crawlId: string) => {
+    const maxAttempts = 120; // 10 minutes max (5s intervals)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/crawl/${crawlId}`);
+        const data = (await response.json()) as {
+          success: boolean;
+          session?: { status: string };
+          data?: unknown;
+          message?: string;
+        };
+
+        // Handle error responses - but continue polling if it's just "not found" (might be timing issue)
+        if (!data.success) {
+          // If session not found and we haven't tried many times, continue polling
+          // (might be a timing issue or server restart)
+          if (data.message?.includes('not found') && attempts < 5) {
+            attempts++;
+            setTimeout(poll, 2000); // Poll more frequently for first few attempts
+            return;
+          }
+          
+          setResult({
+            success: false,
+            message: data.message || 'Failed to check crawl status',
+            crawlId,
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Ensure session exists - but continue polling if it's early
+        if (!data.session) {
+          if (attempts < 5) {
+            attempts++;
+            setTimeout(poll, 2000); // Poll more frequently for first few attempts
+            return;
+          }
+          
+          setResult({
+            success: false,
+            message: 'Crawl session data not available',
+            crawlId,
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        const status = data.session.status;
+
+        if (status === 'completed' && data.data) {
+          // Crawl completed, redirect to results
+          window.location.href = `/?crawlId=${crawlId}`;
+          return;
+        }
+
+        if (status === 'failed') {
+          setResult({
+            success: false,
+            message: 'Crawl failed. Please try again.',
+            crawlId,
+            status: 'failed',
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        attempts++;
+        if (attempts < maxAttempts && (status === 'running' || status === 'pending')) {
+          setTimeout(poll, 5000); // Poll every 5 seconds
+        } else if (attempts >= maxAttempts) {
+          setResult({
+            success: false,
+            message: 'Crawl is taking longer than expected. Please check back later.',
+            crawlId,
+          });
+          setIsSubmitting(false);
+        }
+      } catch (error) {
+        setResult({
+          success: false,
+          message: `Failed to check crawl status: ${(error as Error).message}`,
+          crawlId,
+        });
+        setIsSubmitting(false);
+      }
+    };
+
+    setTimeout(poll, 1000); // Start polling after 1 second
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,15 +136,27 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
       const payload = (await response.json()) as CrawlResponse;
       setResult(payload);
 
-      if (payload.success) {
-        // Refresh dashboard data after a short delay to allow files to settle.
+      if (payload.success && payload.crawlId) {
+        if (payload.queued) {
+          // If queued, poll for status updates
+          pollCrawlStatus(payload.crawlId);
+        } else if (payload.status === 'running') {
+          // If running, poll for completion
+          pollCrawlStatus(payload.crawlId);
+        } else {
+          // If completed immediately (shouldn't happen, but handle it)
+          setTimeout(() => {
+            window.location.href = `/?crawlId=${payload.crawlId}`;
+          }, 1200);
+        }
+      } else if (payload.success && !payload.crawlId) {
+        // Legacy mode - no crawl ID
         setTimeout(() => {
           window.location.reload();
         }, 1200);
       }
     } catch (error) {
       setResult({ success: false, message: (error as Error).message });
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -114,6 +222,18 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
           )}
         >
           <p className="font-semibold">{result.message}</p>
+          {result.crawlId ? (
+            <div className="mt-2">
+              <p className="text-xs text-slate-600">
+                Crawl ID: <code className="rounded bg-white/80 px-2 py-1 font-mono">{result.crawlId}</code>
+              </p>
+              {result.status && (
+                <p className="mt-1 text-xs text-slate-600">
+                  Status: <span className="font-semibold capitalize">{result.status}</span>
+                </p>
+              )}
+            </div>
+          ) : null}
           {result.output ? (
             <pre className="mt-3 max-h-72 overflow-auto rounded bg-white/80 p-3 text-xs text-slate-800">
               {result.output.trim()}

@@ -1,6 +1,7 @@
 // This file renders the Sparkier regression dashboard, summarising user stories and generated Playwright specs.
 import { Activity, Layers, ShieldCheck, Timer } from 'lucide-react';
 import Link from 'next/link';
+import type { SearchParams } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,8 +13,14 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { StoryCard } from '@/components/ui/story-card';
 import { SitemapVisualizer } from '@/components/ui/sitemap-visualizer';
 
-export default async function BrandPage() {
-  const data = await loadDashboardData();
+export default async function BrandPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ crawlId?: string }>;
+}) {
+  const resolvedParams = await searchParams;
+  const crawlId = resolvedParams.crawlId;
+  const data = await loadDashboardData(crawlId);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-4 pb-16 pt-12 sm:px-6 lg:px-8">
@@ -52,7 +59,7 @@ export default async function BrandPage() {
       ) : (
         <div className="grid gap-6">
           {data.stories.map((story) => (
-            <StoryCard key={story.id} story={story} />
+            <StoryCard key={story.id} story={story} crawlId={crawlId} />
           ))}
         </div>
       )}
