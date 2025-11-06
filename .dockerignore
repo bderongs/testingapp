@@ -1,0 +1,18 @@
+# This file excludes files from Docker builds to reduce image size.
+
+node_modules
+.next
+dist
+test-results
+playwright-report
+output
+.git
+.gitignore
+README.md
+.env
+.env*.local
+.DS_Store
+*.log
+.vscode
+.idea
+

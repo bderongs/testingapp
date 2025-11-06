@@ -5,13 +5,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.cli.json",
-    "start": "node dist/index.js",
+    "build": "next build",
+    "start": "next start",
+    "build:cli": "tsc -p tsconfig.cli.json",
+    "start:cli": "node dist/index.js",
     "dev": "next dev",
     "dev:cli": "tsx src/index.ts",
     "dev:ui": "next dev",
     "build:ui": "next build",
     "start:ui": "next start",
+    "postinstall": "npx playwright install --with-deps chromium",
     "lint": "eslint --ext .ts src"
   },
   "dependencies": {
