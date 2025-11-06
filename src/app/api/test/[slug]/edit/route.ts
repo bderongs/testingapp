@@ -2,12 +2,16 @@
 import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic'; // Prevent static generation at build time
+
+// Check if we're in build mode (Next.js sets this during build)
+const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' || 
+                     process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.RAILWAY_ENVIRONMENT;
 
 const requestSchema = z.object({
   instruction: z.string().min(1, 'Instruction is required'),
@@ -15,9 +19,16 @@ const requestSchema = z.object({
   baselineAssertions: z.array(z.string()).optional(),
 });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Dynamic import to avoid loading OpenAI module at build time
+const getOpenAIClient = async () => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  // Dynamic import prevents module from being loaded during build
+  const { default: OpenAI } = await import('openai');
+  return new OpenAI({ apiKey });
+};
 
 const SPEC_DIR = join(process.cwd(), 'output', 'playwright');
 const STORIES_FILE = join(process.cwd(), 'output', 'user-stories.json');
@@ -54,6 +65,17 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ): Promise<NextResponse> {
+  // Prevent execution during build time
+  if (isBuildTime) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'This endpoint is not available during build time',
+      },
+      { status: 503 }
+    );
+  }
+
   const resolvedParams = await params;
   const slug = resolvedParams.slug.replace(/[^a-z0-9-]/g, '');
   const specFile = join(SPEC_DIR, `${slug}.spec.ts`);
@@ -76,8 +98,12 @@ export async function POST(
 
     const { instruction, apply, baselineAssertions: providedAssertions } = parse.data;
 
-    // Check API key
-    if (!process.env.OPENAI_API_KEY) {
+    // Get OpenAI client (will throw if API key is missing)
+    // Use dynamic import to avoid build-time errors
+    let openai: Awaited<ReturnType<typeof getOpenAIClient>>;
+    try {
+      openai = await getOpenAIClient();
+    } catch (error) {
       return NextResponse.json(
         {
           success: false,

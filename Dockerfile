@@ -38,6 +38,10 @@ RUN npx playwright install --with-deps chromium
 COPY . .
 
 # Build the Next.js application
+# Note: OPENAI_API_KEY is not required at build time due to dynamic imports
+# But we set a dummy value to prevent build errors if Next.js tries to analyze the code
+ARG OPENAI_API_KEY=""
+ENV OPENAI_API_KEY=${OPENAI_API_KEY}
 RUN npm run build
 
 # Expose the port Railway will use
