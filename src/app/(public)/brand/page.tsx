@@ -1,7 +1,6 @@
 // This file renders the Sparkier regression dashboard, summarising user stories and generated Playwright specs.
 import { Activity, Layers, ShieldCheck, Timer } from 'lucide-react';
 import Link from 'next/link';
-import type { SearchParams } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
