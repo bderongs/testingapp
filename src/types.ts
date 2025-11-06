@@ -2,11 +2,27 @@
 
 export type StoryKind = 'browsing' | 'interaction' | 'authentication' | 'complex';
 
+/**
+ * Cookie format compatible with Playwright's cookie API.
+ * Used to inject authentication cookies for crawling authenticated pages.
+ */
+export interface Cookie {
+  readonly name: string;
+  readonly value: string;
+  readonly domain: string;
+  readonly path?: string;
+  readonly expires?: number;
+  readonly httpOnly?: boolean;
+  readonly secure?: boolean;
+  readonly sameSite?: 'Strict' | 'Lax' | 'None';
+}
+
 export interface CrawlOptions {
   readonly baseUrl: string;
   readonly maxPages?: number;
   readonly sameOriginOnly?: boolean;
   readonly navigationTimeoutMs?: number;
+  readonly cookies?: readonly Cookie[];
 }
 
 export interface PageLink {

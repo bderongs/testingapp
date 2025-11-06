@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import type { CrawlOptions } from './types';
+import type { CrawlOptions, Cookie } from './types';
 import { crawlSite } from './lib/crawler';
 import { identifyUserStories } from './lib/storyBuilder';
 import { persistArtifacts } from './storage/fileWriter';
@@ -48,14 +48,31 @@ const argsSchema = z.object({
   'same-origin-only': z.boolean().optional(),
   'navigation-timeout': z.number().int().positive().optional(),
   'crawl-id': z.string().optional(),
+  'cookies-file': z.string().optional(),
 });
 
-const mapArgsToOptions = (parsed: z.infer<typeof argsSchema>): CrawlOptions => ({
-  baseUrl: parsed.url,
-  maxPages: parsed['max-pages'],
-  sameOriginOnly: parsed['same-origin-only'],
-  navigationTimeoutMs: parsed['navigation-timeout'],
-});
+const mapArgsToOptions = async (parsed: z.infer<typeof argsSchema>): Promise<CrawlOptions> => {
+  let cookies: readonly Cookie[] | undefined;
+
+  // Load cookies from file if provided
+  if (parsed['cookies-file']) {
+    try {
+      const { readFile } = await import('node:fs/promises');
+      const cookiesContent = await readFile(parsed['cookies-file'], 'utf-8');
+      cookies = JSON.parse(cookiesContent) as readonly Cookie[];
+    } catch (error) {
+      logger.warn(`Failed to load cookies from file: ${(error as Error).message}`);
+    }
+  }
+
+  return {
+    baseUrl: parsed.url,
+    maxPages: parsed['max-pages'],
+    sameOriginOnly: parsed['same-origin-only'],
+    navigationTimeoutMs: parsed['navigation-timeout'],
+    cookies,
+  };
+};
 
 const printUsage = (): void => {
   logger.info(
@@ -74,10 +91,13 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  const options = mapArgsToOptions(parseResult.data);
+  const options = await mapArgsToOptions(parseResult.data);
   const crawlId = parseResult.data['crawl-id'];
 
   logger.info(`Starting crawl for ${options.baseUrl}${crawlId ? ` (crawl ID: ${crawlId})` : ''}`);
+  if (options.cookies && options.cookies.length > 0) {
+    logger.info(`Using ${options.cookies.length} cookie(s) for authenticated crawling`);
+  }
 
   const crawl = await crawlSite(options);
   const userStories = identifyUserStories(crawl);

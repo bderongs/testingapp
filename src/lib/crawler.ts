@@ -49,6 +49,7 @@ export const crawlSite = async ({
   maxPages = DEFAULT_MAX_PAGES,
   sameOriginOnly = true,
   navigationTimeoutMs = DEFAULT_TIMEOUT_MS,
+  cookies,
 }: CrawlOptions): Promise<CrawlResult> => {
   const normalizedBase = normalizeUrl(baseUrl);
   const pending: string[] = [normalizedBase];
@@ -59,6 +60,28 @@ export const crawlSite = async ({
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
+
+  // Inject cookies if provided (must be done before navigating to any pages)
+  if (cookies && cookies.length > 0) {
+    try {
+      // Ensure cookies have required fields and set defaults
+      const normalizedCookies = cookies.map((cookie) => ({
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path || '/',
+        expires: cookie.expires,
+        httpOnly: cookie.httpOnly ?? false,
+        secure: cookie.secure ?? false,
+        sameSite: cookie.sameSite || ('Lax' as const),
+      }));
+
+      await context.addCookies(normalizedCookies);
+      logger.info(`Injected ${normalizedCookies.length} cookie(s) for authenticated crawling`);
+    } catch (error) {
+      logger.warn(`Failed to inject cookies: ${(error as Error).message}. Continuing without cookies.`);
+    }
+  }
 
   try {
     while (pending.length > 0 && visited.size < maxPages) {
