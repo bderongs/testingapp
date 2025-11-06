@@ -7,7 +7,7 @@ interface SectionTitleProps {
   className?: string;
 }
 
-export const SectionTitle = ({ title, subtitle, className }: SectionTitleProps): JSX.Element => (
+export const SectionTitle = ({ title, subtitle, className }: SectionTitleProps) => (
   <div className={cn('flex flex-col gap-1', className)}>
     <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
     {subtitle ? <p className="text-sm text-slate-600">{subtitle}</p> : null}

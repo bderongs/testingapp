@@ -39,7 +39,7 @@ const SCHEMA_KIND_MAP: Record<string, StoryKind> = {
   collectionpage: 'browsing',
 };
 
-const escapeForRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeForRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 const escapeForSingleQuote = (value: string): string => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
@@ -68,14 +68,14 @@ interface StoryCandidate {
   readonly navRefs: readonly NavReference[];
   readonly personaTag?: string;
   readonly goalSummary?: string;
-  readonly primaryCtaLabel?: string;
+  readonly primaryCta?: PrimaryCtaSelection;
 }
 
 interface OutlineContext {
   readonly page: PageSummary;
   readonly kind: StoryKind;
   readonly navRefs: readonly NavReference[];
-  readonly primaryCtaLabel?: string;
+  readonly primaryCta?: PrimaryCtaSelection;
   readonly personaTag?: string;
   readonly goalSummary?: string;
   readonly supportingPages: readonly string[];
@@ -92,29 +92,24 @@ const buildNavigationIndex = (crawl: CrawlResult): Map<string, NavReference[]> =
   const index = new Map<string, NavReference[]>();
 
   for (const page of crawl.pages.values()) {
+    const normalizedPageUrl = normalizeUrl(page.url);
+    const navRefs: NavReference[] = [];
+    
     page.navigationSections.forEach((section) => {
       section.items.forEach((item) => {
-        const resolved = safeResolve(page.url, item.url);
-        if (!resolved) {
-          return;
-        }
-
-        const normalized = normalizeUrl(resolved);
         const entry: NavReference = {
           path: [section.label, item.text].filter(Boolean).join(' -> ') || item.text,
           itemLabel: item.text,
           sectionLabel: section.label,
           depth: item.depth,
         };
-
-        const existing = index.get(normalized);
-        if (existing) {
-          existing.push(entry);
-        } else {
-          index.set(normalized, [entry]);
-        }
+        navRefs.push(entry);
       });
     });
+    
+    if (navRefs.length > 0) {
+      index.set(normalizedPageUrl, navRefs);
+    }
   }
 
   return index;
@@ -131,7 +126,7 @@ const detectGoal = (page: PageSummary, navRefs: readonly NavReference[]): string
     page.metaDescription ?? '',
     ...page.primaryKeywords,
     ...navRefs.map((ref) => ref.itemLabel),
-    ...page.primaryCtas,
+    ...page.primaryCtas.map((cta) => cta.label),
   ];
   const haystack = textSources.join(' ').toLowerCase();
 
@@ -208,7 +203,7 @@ const pickStoryKind = (page: PageSummary, navRefs: readonly NavReference[]): Sto
     normalizedTitle,
     ...page.primaryKeywords.map((keyword) => keyword.toLowerCase()),
     ...navRefs.map((ref) => ref.itemLabel.toLowerCase()),
-    ...page.primaryCtas.map((cta) => cta.toLowerCase()),
+    ...page.primaryCtas.map((cta) => cta.label.toLowerCase()),
   ];
   const hasCtaCue = CTA_KEYWORDS.some((keyword) => ctaTextCandidates.some((candidate) => candidate.includes(keyword)));
 
@@ -224,7 +219,7 @@ const computeScore = (
   kind: StoryKind,
   navRefs: readonly NavReference[],
   personaTag?: string,
-  primaryCtaLabel?: string
+  primaryCta?: PrimaryCtaSelection
 ): number => {
   let score = 0;
 
@@ -254,7 +249,7 @@ const computeScore = (
   }
 
   const ctaMatches = CTA_KEYWORDS.filter((keyword) =>
-    [page.title, ...page.primaryKeywords, ...page.primaryCtas].some((value) => value.toLowerCase().includes(keyword))
+    [page.title, ...page.primaryKeywords, ...page.primaryCtas.map((cta) => cta.label)].some((value) => value.toLowerCase().includes(keyword))
   );
   if (ctaMatches.length > 0) {
     score += 18;
@@ -264,7 +259,7 @@ const computeScore = (
     score += 8;
   }
 
-  if (primaryCtaLabel) {
+  if (primaryCta) {
     score += 10;
   }
 
@@ -303,9 +298,9 @@ const buildDescription = (
   }
 };
 
-const deriveScriptName = (page: PageSummary, kind: StoryKind, navRefs: readonly NavReference[], primaryCtaLabel?: string): string => {
+const deriveScriptName = (page: PageSummary, kind: StoryKind, navRefs: readonly NavReference[], primaryCta?: PrimaryCtaSelection): string => {
   const fallback = page.title || page.url.split('/').filter(Boolean).pop() || 'story';
-  const primaryLabel = primaryCtaLabel ?? navRefs[0]?.itemLabel ?? fallback;
+  const primaryLabel = primaryCta?.label ?? navRefs[0]?.itemLabel ?? fallback;
   const slug = toSlug(primaryLabel);
   return `${kind}-${slug || 'flow'}`;
 };
@@ -314,7 +309,7 @@ const buildPlaywrightOutline = ({
   page,
   kind,
   navRefs,
-  primaryCtaLabel,
+  primaryCta,
   personaTag,
   goalSummary,
   supportingPages,
@@ -337,7 +332,7 @@ const buildPlaywrightOutline = ({
 
   if (navRefs[0]) {
     const navRegex = escapeForRegex(navRefs[0].itemLabel);
-    steps.push(`await expect(page.getByRole('link', { name: /${navRegex}/i })).toBeVisible();`);
+    steps.push(`await expect(page.getByRole('link', { name: /${navRegex}/i }).first()).toBeVisible();`);
   }
 
   if (personaTag) {
@@ -363,9 +358,38 @@ const buildPlaywrightOutline = ({
     steps.push('// TODO: Provide authentication credentials (e.g., TEST_EMAIL / TEST_PASSWORD) before running this scenario.');
   }
 
-  if (primaryCtaLabel) {
-    const ctaRegex = escapeForRegex(primaryCtaLabel);
-    steps.push(`const cta = page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }));`);
+  if (primaryCta) {
+    const ctaRegex = escapeForRegex(primaryCta.label);
+    
+    // Build a more precise selector based on CTA metadata
+    let ctaSelector: string;
+    
+    if (primaryCta.isInMainContent) {
+      // Scope to main content area for better precision
+      const baseSelector = primaryCta.elementType === 'button' 
+        ? `page.locator('main, [role="main"]').getByRole('button', { name: /${ctaRegex}/i })`
+        : `page.locator('main, [role="main"]').getByRole('link', { name: /${ctaRegex}/i })`;
+      
+      // Try the preferred type first, fallback to the other type
+      if (primaryCta.elementType === 'button') {
+        ctaSelector = `${baseSelector}.or(page.locator('main, [role="main"]').getByRole('link', { name: /${ctaRegex}/i }))`;
+      } else {
+        ctaSelector = `page.locator('main, [role="main"]').getByRole('button', { name: /${ctaRegex}/i }).or(${baseSelector})`;
+      }
+    } else {
+      // Not in main content, use standard selector but prefer the detected type
+      if (primaryCta.elementType === 'button') {
+        ctaSelector = `page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }))`;
+      } else if (primaryCta.elementType === 'link') {
+        ctaSelector = `page.getByRole('link', { name: /${ctaRegex}/i }).or(page.getByRole('button', { name: /${ctaRegex}/i }))`;
+      } else {
+        // Unknown type, try button first
+        ctaSelector = `page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }))`;
+      }
+    }
+    
+    // Always add .first() to handle multiple matches
+    steps.push(`const cta = ${ctaSelector}.first();`);
     steps.push('await expect(cta).toBeVisible();');
     steps.push('await cta.click();');
   }
@@ -384,7 +408,7 @@ const buildPlaywrightOutline = ({
   return Array.from(new Set(steps));
 };
 
-const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, primaryCtaLabel: string | undefined): string => {
+const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, primaryCta?: PrimaryCtaSelection): string => {
   if (goalSummary) {
     return toSentenceCase(goalSummary);
   }
@@ -395,7 +419,7 @@ const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, 
     case 'complex':
       return 'Form submission succeeds with test data and displays the expected confirmation state.';
     case 'interaction': {
-      const cta = primaryCtaLabel ? ` by activating "${primaryCtaLabel}"` : '';
+      const cta = primaryCta?.label ? ` by activating "${primaryCta.label}"` : '';
       return `Primary interaction completes without errors${cta}.`;
     }
     case 'browsing':
@@ -407,8 +431,8 @@ const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, 
 const buildBaselineAssertions = ({
   page,
   navRefs,
-  primaryCtaLabel,
-}: Pick<OutlineContext, 'page' | 'navRefs' | 'primaryCtaLabel'>): string[] => {
+  primaryCta,
+}: Pick<OutlineContext, 'page' | 'navRefs' | 'primaryCta'>): string[] => {
   const assertions: string[] = [];
 
   if (page.title) {
@@ -419,8 +443,8 @@ const buildBaselineAssertions = ({
     assertions.push(`Primary heading displays "${page.headingOutline[0]?.text}".`);
   }
 
-  if (primaryCtaLabel) {
-    assertions.push(`CTA "${primaryCtaLabel}" is visible and interactive.`);
+  if (primaryCta?.label) {
+    assertions.push(`CTA "${primaryCta.label}" is visible and interactive.`);
   }
 
   if (navRefs[0]) {
@@ -437,8 +461,8 @@ const buildBaselineAssertions = ({
 const buildRepeatabilityNotes = ({
   kind,
   page,
-  primaryCtaLabel,
-}: Pick<OutlineContext, 'kind' | 'page' | 'primaryCtaLabel'>): string[] => {
+  primaryCta,
+}: Pick<OutlineContext, 'kind' | 'page' | 'primaryCta'>): string[] => {
   const notes: string[] = [];
 
   if (kind === 'authentication') {
@@ -449,8 +473,8 @@ const buildRepeatabilityNotes = ({
     notes.push('Provide deterministic test data for form fields and clear submissions after each run.');
   }
 
-  if (primaryCtaLabel) {
-    const ctaFolded = primaryCtaLabel.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  if (primaryCta?.label) {
+    const ctaFolded = primaryCta.label.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
     if (/reserver|reserve|book|purchase|checkout/.test(ctaFolded)) {
       notes.push('Mock downstream booking/purchase side-effects or run against a sandbox environment.');
     }
@@ -467,15 +491,24 @@ const buildRepeatabilityNotes = ({
   return notes;
 };
 
-const selectPrimaryCtaLabel = (ctas: readonly string[]): string | undefined => {
+interface PrimaryCtaSelection {
+  readonly label: string;
+  readonly elementType: 'button' | 'link' | 'unknown';
+  readonly isInMainContent: boolean;
+}
+
+const selectPrimaryCta = (ctas: readonly { readonly label: string; readonly elementType: 'button' | 'link' | 'unknown'; readonly isInMainContent: boolean; readonly priority: number }[]): PrimaryCtaSelection | undefined => {
   if (ctas.length === 0) {
     return undefined;
   }
 
-  let bestLabel: string | undefined;
+  // CTAs are already sorted by priority (isInMainContent gets higher priority)
+  // Select the best one based on our scoring
+  let bestCta: PrimaryCtaSelection | undefined;
   let bestScore = Number.NEGATIVE_INFINITY;
 
-  ctas.forEach((label, index) => {
+  ctas.forEach((cta, index) => {
+    const label = cta.label;
     const repairLabel = (input: string): string => {
       const trimmed = input.replace(/[\u200B-\u200D\u2060]/g, '').trim();
       const collapsed = trimmed.replace(/\s+/g, '');
@@ -591,13 +624,29 @@ const selectPrimaryCtaLabel = (ctas: readonly string[]): string | undefined => {
     let displayLabel = shouldOverride && canonicalLabel ? prettify(canonicalLabel) : normalized;
     displayLabel = displayLabel.replace(/Reserver/g, '\u0052\u00E9server');
 
+    // Add bonus for CTAs in main content and preferred element types
+    if (cta.isInMainContent) {
+      score += 10;
+    }
+    if (cta.elementType === 'button') {
+      score += 2; // Slight preference for buttons over links
+    }
+
     if (score > bestScore) {
       bestScore = score;
-      bestLabel = displayLabel;
+      bestCta = {
+        label: displayLabel,
+        elementType: cta.elementType,
+        isInMainContent: cta.isInMainContent,
+      };
     }
   });
 
-  return bestLabel ?? ctas[0];
+  return bestCta ?? {
+    label: ctas[0].label,
+    elementType: ctas[0].elementType,
+    isInMainContent: ctas[0].isInMainContent,
+  };
 };
 
 const buildId = (page: PageSummary, kind: StoryKind): string => {
@@ -616,8 +665,8 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
     const kind = pickStoryKind(page, navRefs);
     const persona = detectPersona(page);
     const goal = detectGoal(page, navRefs);
-    const primaryCtaLabel = selectPrimaryCtaLabel(page.primaryCtas);
-    const score = computeScore(page, kind, navRefs, persona, primaryCtaLabel);
+    const primaryCta = selectPrimaryCta(page.primaryCtas);
+    const score = computeScore(page, kind, navRefs, persona, primaryCta);
 
     candidates.push({
       page,
@@ -626,7 +675,7 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       navRefs,
       personaTag: persona,
       goalSummary: goal,
-      primaryCtaLabel,
+      primaryCta,
     });
   }
 
@@ -642,7 +691,7 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
   const selectedUrls = new Set<string>();
 
   for (const candidate of candidates) {
-    const { page, kind, navRefs, personaTag, goalSummary, primaryCtaLabel } = candidate;
+    const { page, kind, navRefs, personaTag, goalSummary, primaryCta } = candidate;
     const normalizedUrl = normalizeUrl(page.url);
 
     if (selectedUrls.has(`${normalizedUrl}-${kind}`)) {
@@ -658,24 +707,24 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       page,
       kind,
       navRefs,
-      primaryCtaLabel,
+      primaryCta,
       personaTag,
       goalSummary,
       supportingPages: supporting,
     });
-    const expectedOutcome = buildExpectedOutcome(kind, goalSummary, primaryCtaLabel);
-    const baselineAssertions = buildBaselineAssertions({ page, navRefs, primaryCtaLabel });
-    const repeatabilityNotes = buildRepeatabilityNotes({ kind, page, primaryCtaLabel });
+    const expectedOutcome = buildExpectedOutcome(kind, goalSummary, primaryCta);
+    const baselineAssertions = buildBaselineAssertions({ page, navRefs, primaryCta });
+    const repeatabilityNotes = buildRepeatabilityNotes({ kind, page, primaryCta });
 
     const story: UserStory = {
       id: buildId(page, kind),
       kind,
       title: page.title || page.url,
       entryUrl: page.url,
-      description: buildDescription(page, kind, navRefs, personaTag, goalSummary, primaryCtaLabel),
-      suggestedScriptName: deriveScriptName(page, kind, navRefs, primaryCtaLabel),
+      description: buildDescription(page, kind, navRefs, personaTag, goalSummary, primaryCta?.label),
+      suggestedScriptName: deriveScriptName(page, kind, navRefs, primaryCta),
       supportingPages: supporting.slice(0, 5),
-      primaryCtaLabel,
+      primaryCtaLabel: primaryCta?.label,
       playwrightOutline: outline,
       expectedOutcome,
       baselineAssertions,

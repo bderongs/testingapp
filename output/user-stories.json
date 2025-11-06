@@ -4,7 +4,7 @@
     "kind": "authentication",
     "title": "Connexion | Sparkier",
     "entryUrl": "https://www.sparkier.io/auth/signin",
-    "description": "Validate authentication on Connexion | Sparkier via Connexion, ensuring login works with provided test credentials.",
+    "description": "Validate authentication on Connexion | Sparkier, ensuring login works with provided test credentials.",
     "suggestedScriptName": "authentication-continuer-avec-linkedin",
     "supportingPages": [
       "https://www.sparkier.io/terms",
@@ -16,21 +16,19 @@
       "await page.goto('https://www.sparkier.io/auth/signin', { waitUntil: 'networkidle' });",
       "await expect(page).toHaveTitle(/Connexion \\| Sparkier/i);",
       "await expect(page.getByRole('heading', { level: 2, name: /Espace Consultant/i })).toBeVisible();",
-      "await expect(page.getByRole('link', { name: /Connexion/i })).toBeVisible();",
       "// Detected form fields: email.",
       "// TODO: Provide authentication credentials (e.g., TEST_EMAIL / TEST_PASSWORD) before running this scenario.",
-      "const cta = page.getByRole('button', { name: /Continuer avec LinkedIn/i }).or(page.getByRole('link', { name: /Continuer avec LinkedIn/i }));",
+      "const cta = page.getByRole('button', { name: /Continuer avec LinkedIn/i }).or(page.getByRole('link', { name: /Continuer avec LinkedIn/i })).first();",
       "await expect(cta).toBeVisible();",
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
-      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io/terms/); // adjust expected destination if necessary"
+      "await expect(page).toHaveURL(/https:\\/\\/www\\.sparkier\\.io\\/terms/); // adjust expected destination if necessary"
     ],
     "expectedOutcome": "Successful authentication using the provided test account without triggering MFA or lockout.",
     "baselineAssertions": [
       "Title matches \"Connexion | Sparkier\".",
       "Primary heading displays \"Espace Consultant\".",
       "CTA \"Continuer avec LinkedIn\" is visible and interactive.",
-      "Navigation link \"Connexion\" remains visible.",
       "Key form fields accept input and validation messages remain clear."
     ],
     "repeatabilityNotes": [
@@ -44,7 +42,7 @@
     "title": "Sparkier - Boostez votre activité avec les Sparks",
     "entryUrl": "https://www.sparkier.io/",
     "description": "Navigate through Sparkier - Boostez votre activité avec les Sparks via Sparkier for marketing personas to review frequently asked questions, verifying the content loads and links resolve.",
-    "suggestedScriptName": "browsing-connexion",
+    "suggestedScriptName": "browsing-facture-lectronique",
     "supportingPages": [
       "https://www.sparkier.io/",
       "https://www.sparkier.io/auth/signin",
@@ -52,25 +50,25 @@
       "https://www.sparkier.io/hub/conformite-impact",
       "https://www.sparkier.io/sparks/spark-1757930749824"
     ],
-    "primaryCtaLabel": "Connexion",
+    "primaryCtaLabel": "Facture électronique",
     "playwrightOutline": [
       "await page.goto('https://www.sparkier.io/', { waitUntil: 'networkidle' });",
       "await expect(page).toHaveTitle(/Sparkier - Boostez votre activité avec les Sparks/i);",
       "await expect(page.getByRole('heading', { level: 1, name: /Débloquez vos décisions stratégiques en 1h/i })).toBeVisible();",
-      "await expect(page.getByRole('link', { name: /Sparkier/i })).toBeVisible();",
+      "await expect(page.getByRole('link', { name: /Sparkier/i }).first()).toBeVisible();",
       "// Persona focus: marketing.",
       "// Goal: Review frequently asked questions.",
-      "const cta = page.getByRole('button', { name: /Connexion/i }).or(page.getByRole('link', { name: /Connexion/i }));",
+      "const cta = page.locator('main, [role=\"main\"]').getByRole('button', { name: /Facture électronique/i }).or(page.locator('main, [role=\"main\"]').getByRole('link', { name: /Facture électronique/i })).first();",
       "await expect(cta).toBeVisible();",
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
-      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+      "await expect(page).toHaveURL(/https:\\/\\/www\\.sparkier\\.io\\//); // adjust expected destination if necessary"
     ],
     "expectedOutcome": "Review frequently asked questions",
     "baselineAssertions": [
       "Title matches \"Sparkier - Boostez votre activité avec les Sparks\".",
       "Primary heading displays \"Débloquez vos décisions stratégiques en 1h\".",
-      "CTA \"Connexion\" is visible and interactive.",
+      "CTA \"Facture électronique\" is visible and interactive.",
       "Navigation link \"Sparkier\" remains visible."
     ],
     "repeatabilityNotes": [
@@ -83,8 +81,8 @@
     "kind": "interaction",
     "title": "Sparkier - Créez votre boutique de conseil en ligne | Vendez vos Sparks",
     "entryUrl": "https://www.sparkier.io/consultants",
-    "description": "Exercise the primary CTA on Sparkier - Créez votre boutique de conseil en ligne | Vendez vos Sparks via Vendre avec Sparkier for design personas using the \"Commencer\" CTA, confirming interactive elements behave as expected.",
-    "suggestedScriptName": "interaction-commencer",
+    "description": "Exercise the primary CTA on Sparkier - Créez votre boutique de conseil en ligne | Vendez vos Sparks via Sparkier for design personas using the \"Voir un exemple\" CTA, confirming interactive elements behave as expected.",
+    "suggestedScriptName": "interaction-voir-un-exemple",
     "supportingPages": [
       "https://www.sparkier.io/",
       "https://www.sparkier.io/pricing",
@@ -92,25 +90,25 @@
       "https://www.sparkier.io/auth/consultants",
       "https://www.sparkier.io/consultants"
     ],
-    "primaryCtaLabel": "Commencer",
+    "primaryCtaLabel": "Voir un exemple",
     "playwrightOutline": [
       "await page.goto('https://www.sparkier.io/consultants', { waitUntil: 'networkidle' });",
       "await expect(page).toHaveTitle(/Sparkier - Créez votre boutique de conseil en ligne \\| Vendez vos Sparks/i);",
       "await expect(page.getByRole('heading', { level: 1, name: /La boutique du consulting/i })).toBeVisible();",
-      "await expect(page.getByRole('link', { name: /Vendre avec Sparkier/i })).toBeVisible();",
+      "await expect(page.getByRole('link', { name: /Sparkier/i }).first()).toBeVisible();",
       "// Persona focus: design.",
-      "const cta = page.getByRole('button', { name: /Commencer/i }).or(page.getByRole('link', { name: /Commencer/i }));",
+      "const cta = page.locator('main, [role=\"main\"]').getByRole('button', { name: /Voir un exemple/i }).or(page.locator('main, [role=\"main\"]').getByRole('link', { name: /Voir un exemple/i })).first();",
       "await expect(cta).toBeVisible();",
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
-      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+      "await expect(page).toHaveURL(/https:\\/\\/www\\.sparkier\\.io\\//); // adjust expected destination if necessary"
     ],
-    "expectedOutcome": "Primary interaction completes without errors by activating \"Commencer\".",
+    "expectedOutcome": "Primary interaction completes without errors by activating \"Voir un exemple\".",
     "baselineAssertions": [
       "Title matches \"Sparkier - Créez votre boutique de conseil en ligne | Vendez vos Sparks\".",
       "Primary heading displays \"La boutique du consulting\".",
-      "CTA \"Commencer\" is visible and interactive.",
-      "Navigation link \"Vendre avec Sparkier\" remains visible."
+      "CTA \"Voir un exemple\" is visible and interactive.",
+      "Navigation link \"Sparkier\" remains visible."
     ],
     "repeatabilityNotes": [
       "No special setup required; verify target environment stability before regression runs."
@@ -122,7 +120,7 @@
     "kind": "interaction",
     "title": "Conformité RGPD en 5 étapes pour Freelances | Sparkier",
     "entryUrl": "https://www.sparkier.io/sparks/spark-1757930749824",
-    "description": "Exercise the primary CTA on Conformité RGPD en 5 étapes pour Freelances | Sparkier for builders personas to evaluate the product offering using the \"Réserver\" CTA, confirming interactive elements behave as expected.",
+    "description": "Exercise the primary CTA on Conformité RGPD en 5 étapes pour Freelances | Sparkier via Sparkier for builders personas to evaluate the product offering using the \"Réserver\" CTA, confirming interactive elements behave as expected.",
     "suggestedScriptName": "interaction-r-server",
     "supportingPages": [
       "https://www.sparkier.io/",
@@ -136,19 +134,21 @@
       "await page.goto('https://www.sparkier.io/sparks/spark-1757930749824', { waitUntil: 'networkidle' });",
       "await expect(page).toHaveTitle(/Conformité RGPD en 5 étapes pour Freelances \\| Sparkier/i);",
       "await expect(page.getByRole('heading', { level: 1, name: /Conformité RGPD en 5 étapes pour Freelances/i })).toBeVisible();",
+      "await expect(page.getByRole('link', { name: /Sparkier/i }).first()).toBeVisible();",
       "// Persona focus: builders.",
       "// Goal: Evaluate the product offering.",
-      "const cta = page.getByRole('button', { name: /Réserver/i }).or(page.getByRole('link', { name: /Réserver/i }));",
+      "const cta = page.locator('main, [role=\"main\"]').getByRole('button', { name: /Réserver/i }).or(page.locator('main, [role=\"main\"]').getByRole('link', { name: /Réserver/i })).first();",
       "await expect(cta).toBeVisible();",
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
-      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+      "await expect(page).toHaveURL(/https:\\/\\/www\\.sparkier\\.io\\//); // adjust expected destination if necessary"
     ],
     "expectedOutcome": "Evaluate the product offering",
     "baselineAssertions": [
       "Title matches \"Conformité RGPD en 5 étapes pour Freelances | Sparkier\".",
       "Primary heading displays \"Conformité RGPD en 5 étapes pour Freelances\".",
-      "CTA \"Réserver\" is visible and interactive."
+      "CTA \"Réserver\" is visible and interactive.",
+      "Navigation link \"Sparkier\" remains visible."
     ],
     "repeatabilityNotes": [
       "Mock downstream booking/purchase side-effects or run against a sandbox environment.",
@@ -161,31 +161,33 @@
     "kind": "interaction",
     "title": "Conformité et Impact - RSE, RGPD pour PME | Sparkier",
     "entryUrl": "https://www.sparkier.io/hub/conformite-impact",
-    "description": "Exercise the primary CTA on Conformité et Impact - RSE, RGPD pour PME | Sparkier using the \"Connexion\" CTA, confirming interactive elements behave as expected.",
-    "suggestedScriptName": "interaction-connexion",
+    "description": "Exercise the primary CTA on Conformité et Impact - RSE, RGPD pour PME | Sparkier via Sparkier using the \"Voir le  Spark\" CTA, confirming interactive elements behave as expected.",
+    "suggestedScriptName": "interaction-voir-le-spark",
     "supportingPages": [
       "https://www.sparkier.io/",
       "https://www.sparkier.io/auth/clients",
       "https://www.sparkier.io/hub",
-      "https://www.sparkier.io/eleonore-mabille",
-      "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data"
+      "https://www.sparkier.io/romeo-fotso",
+      "https://www.sparkier.io/eleonore-mabille"
     ],
-    "primaryCtaLabel": "Connexion",
+    "primaryCtaLabel": "Voir le  Spark",
     "playwrightOutline": [
       "await page.goto('https://www.sparkier.io/hub/conformite-impact', { waitUntil: 'networkidle' });",
       "await expect(page).toHaveTitle(/Conformité et Impact - RSE, RGPD pour PME \\| Sparkier/i);",
       "await expect(page.getByRole('heading', { level: 1, name: /Conformité & Impact/i })).toBeVisible();",
-      "const cta = page.getByRole('button', { name: /Connexion/i }).or(page.getByRole('link', { name: /Connexion/i }));",
+      "await expect(page.getByRole('link', { name: /Sparkier/i }).first()).toBeVisible();",
+      "const cta = page.locator('main, [role=\"main\"]').getByRole('button', { name: /Voir le  Spark/i }).or(page.locator('main, [role=\"main\"]').getByRole('link', { name: /Voir le  Spark/i })).first();",
       "await expect(cta).toBeVisible();",
       "await cta.click();",
       "// Verify navigation after performing the primary action.",
-      "await expect(page).toHaveURL(/https://www\\.sparkier\\.io//); // adjust expected destination if necessary"
+      "await expect(page).toHaveURL(/https:\\/\\/www\\.sparkier\\.io\\//); // adjust expected destination if necessary"
     ],
-    "expectedOutcome": "Primary interaction completes without errors by activating \"Connexion\".",
+    "expectedOutcome": "Primary interaction completes without errors by activating \"Voir le  Spark\".",
     "baselineAssertions": [
       "Title matches \"Conformité et Impact - RSE, RGPD pour PME | Sparkier\".",
       "Primary heading displays \"Conformité & Impact\".",
-      "CTA \"Connexion\" is visible and interactive."
+      "CTA \"Voir le  Spark\" is visible and interactive.",
+      "Navigation link \"Sparkier\" remains visible."
     ],
     "repeatabilityNotes": [
       "No special setup required; verify target environment stability before regression runs."

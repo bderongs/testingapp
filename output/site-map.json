@@ -296,7 +296,7 @@
         },
         {
           "url": "https://www.sparkier.io/sparks/mise-en-place-d-une-politique-achat-responsable",
-          "text": "Voir Mise en place d'une politique achat responsable (1-Aller plus loin)"
+          "text": "Voir Mettre en place d'une politique achat responsable (1-Aller plus loin)"
         },
         {
           "url": "https://www.sparkier.io/jennifer-damon",
@@ -491,20 +491,20 @@
           "text": "Yvan ZINK"
         },
         {
-          "url": "https://www.sparkier.io/sparks/audit-marketing-express",
-          "text": "Voir Audit Marketing Express"
-        },
-        {
-          "url": "https://www.sparkier.io/julien-hatton",
-          "text": "Julien Hatton"
-        },
-        {
           "url": "https://www.sparkier.io/sparks/audit-de-marque-pour-opportunites-strategiques",
           "text": "Voir Audit de marque pour opportunités stratégiques"
         },
         {
           "url": "https://www.sparkier.io/patrick-faure",
           "text": "Patrick Faure"
+        },
+        {
+          "url": "https://www.sparkier.io/sparks/audit-marketing-express",
+          "text": "Voir Audit Marketing Express"
+        },
+        {
+          "url": "https://www.sparkier.io/julien-hatton",
+          "text": "Julien Hatton"
         },
         {
           "url": "https://www.sparkier.io/sparks/votre-strategie-commerciale-en-90-minutes-claire-et-actionnable",
@@ -1599,7 +1599,7 @@
         },
         {
           "level": 2,
-          "text": "Mise en place d'une politique achat responsable (1..."
+          "text": "Mettre en place d'une politique achat responsable..."
         },
         {
           "level": 2,
@@ -1700,11 +1700,11 @@
         },
         {
           "level": 2,
-          "text": "Audit Marketing Express"
+          "text": "Audit de marque pour opportunités stratégiques"
         },
         {
           "level": 2,
-          "text": "Audit de marque pour opportunités stratégiques"
+          "text": "Audit Marketing Express"
         },
         {
           "level": 2,
@@ -2244,11 +2244,36 @@
         "stratégie"
       ],
       "primaryCtas": [
-        "Connexion",
-        "Vendre avec Sparkier",
-        "Ouvrir le menu",
-        "Facture électronique",
-        "RGPD"
+        {
+          "label": "Facture électronique",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "RGPD",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "RSE",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Scroll right",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Bu ine  Model",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        }
       ]
     },
     {
@@ -2306,9 +2331,24 @@
         "boutique conseil"
       ],
       "primaryCtas": [
-        "Continuer avec LinkedIn",
-        "Continuer avec Google",
-        "Continuer"
+        {
+          "label": "Continuer avec LinkedIn",
+          "elementType": "button",
+          "isInMainContent": false,
+          "priority": 0
+        },
+        {
+          "label": "Continuer avec Google",
+          "elementType": "button",
+          "isInMainContent": false,
+          "priority": 0
+        },
+        {
+          "label": "Continuer",
+          "elementType": "button",
+          "isInMainContent": false,
+          "priority": 0
+        }
       ]
     },
     {
@@ -2361,164 +2401,164 @@
           "text": ""
         },
         {
-          "url": "https://www.sparkier.io/nicolas-faget",
-          "text": "sparkier.io/nicolas-faget"
+          "url": "https://www.sparkier.io/etienne-grosjean",
+          "text": "sparkier.io/etienne-grosjean"
         },
         {
-          "url": "https://www.sparkier.io/nathan-brochot",
-          "text": "sparkier.io/nathan-brochot"
+          "url": "https://www.sparkier.io/roxane-linieres",
+          "text": "sparkier.io/roxane-linieres"
         },
         {
-          "url": "https://www.sparkier.io/alexandre-faure",
-          "text": "sparkier.io/alexandre-faure"
+          "url": "https://www.sparkier.io/xavier-bour",
+          "text": "sparkier.io/xavier-bour"
         },
         {
-          "url": "https://www.sparkier.io/jennifer-damon",
-          "text": "sparkier.io/jennifer-damon"
+          "url": "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data",
+          "text": "sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data"
         },
         {
-          "url": "https://www.sparkier.io/mathieu-strabach",
-          "text": "sparkier.io/mathieu-strabach"
+          "url": "https://www.sparkier.io/pierre-gall",
+          "text": "sparkier.io/pierre-gall"
         },
         {
-          "url": "https://www.sparkier.io/agnes-parra",
-          "text": "sparkier.io/agnes-parra"
+          "url": "https://www.sparkier.io/vincent-guigui",
+          "text": "sparkier.io/vincent-guigui"
         },
         {
-          "url": "https://www.sparkier.io/dounia-hamza-2",
-          "text": "sparkier.io/dounia-hamza-2"
+          "url": "https://www.sparkier.io/aboubackry-sow",
+          "text": "sparkier.io/aboubackry-sow"
+        },
+        {
+          "url": "https://www.sparkier.io/jean-christophe-bonetti",
+          "text": "sparkier.io/jean-christophe-bonetti"
+        },
+        {
+          "url": "https://www.sparkier.io/stephanie-vinay",
+          "text": "sparkier.io/stephanie-vinay"
+        },
+        {
+          "url": "https://www.sparkier.io/antoine-alexandre",
+          "text": "sparkier.io/antoine-alexandre"
+        },
+        {
+          "url": "https://www.sparkier.io/joevin-canet",
+          "text": "sparkier.io/joevin-canet"
+        },
+        {
+          "url": "https://www.sparkier.io/malek-bekhouche",
+          "text": "sparkier.io/malek-bekhouche"
+        },
+        {
+          "url": "https://www.sparkier.io/laurent-cruz-mermy",
+          "text": "sparkier.io/laurent-cruz-mermy"
+        },
+        {
+          "url": "https://www.sparkier.io/christophe-dri",
+          "text": "sparkier.io/christophe-dri"
+        },
+        {
+          "url": "https://www.sparkier.io/rachel-pierre-roulin",
+          "text": "sparkier.io/rachel-pierre-roulin"
+        },
+        {
+          "url": "https://www.sparkier.io/edouard-laforge",
+          "text": "sparkier.io/edouard-laforge"
+        },
+        {
+          "url": "https://www.sparkier.io/philippe-lalemant",
+          "text": "sparkier.io/philippe-lalemant"
         },
         {
           "url": "https://www.sparkier.io/pierre-varinard",
           "text": "sparkier.io/pierre-varinard"
         },
         {
-          "url": "https://www.sparkier.io/pierre-henri-tirloy",
-          "text": "sparkier.io/pierre-henri-tirloy"
-        },
-        {
-          "url": "https://www.sparkier.io/pascal-ta",
-          "text": "sparkier.io/pascal-ta"
-        },
-        {
-          "url": "https://www.sparkier.io/david-peltier",
-          "text": "sparkier.io/david-peltier"
-        },
-        {
-          "url": "https://www.sparkier.io/aymeric-briest",
-          "text": "sparkier.io/aymeric-briest"
-        },
-        {
-          "url": "https://www.sparkier.io/stephane-petitjean",
-          "text": "sparkier.io/stephane-petitjean"
-        },
-        {
-          "url": "https://www.sparkier.io/mathieu-thurninger",
-          "text": "sparkier.io/mathieu-thurninger"
-        },
-        {
-          "url": "https://www.sparkier.io/etienne-grosjean",
-          "text": "sparkier.io/etienne-grosjean"
-        },
-        {
-          "url": "https://www.sparkier.io/bertrand-jouin",
-          "text": "sparkier.io/bertrand-jouin"
-        },
-        {
-          "url": "https://www.sparkier.io/michael-bourdin",
-          "text": "sparkier.io/michael-bourdin"
-        },
-        {
-          "url": "https://www.sparkier.io/aurelien-jalabert",
-          "text": "sparkier.io/aurelien-jalabert"
-        },
-        {
-          "url": "https://www.sparkier.io/denis-benichou",
-          "text": "sparkier.io/denis-benichou"
-        },
-        {
-          "url": "https://www.sparkier.io/fares-kebir-2",
-          "text": "sparkier.io/fares-kebir-2"
-        },
-        {
-          "url": "https://www.sparkier.io/nicolas-faget",
-          "text": "sparkier.io/nicolas-faget"
-        },
-        {
-          "url": "https://www.sparkier.io/nathan-brochot",
-          "text": "sparkier.io/nathan-brochot"
-        },
-        {
-          "url": "https://www.sparkier.io/alexandre-faure",
-          "text": "sparkier.io/alexandre-faure"
+          "url": "https://www.sparkier.io/yann-lagrue",
+          "text": "sparkier.io/yann-lagrue"
         },
         {
           "url": "https://www.sparkier.io/jennifer-damon",
           "text": "sparkier.io/jennifer-damon"
         },
         {
-          "url": "https://www.sparkier.io/mathieu-strabach",
-          "text": "sparkier.io/mathieu-strabach"
+          "url": "https://www.sparkier.io/etienne-grosjean",
+          "text": "sparkier.io/etienne-grosjean"
         },
         {
-          "url": "https://www.sparkier.io/agnes-parra",
-          "text": "sparkier.io/agnes-parra"
+          "url": "https://www.sparkier.io/roxane-linieres",
+          "text": "sparkier.io/roxane-linieres"
         },
         {
-          "url": "https://www.sparkier.io/dounia-hamza-2",
-          "text": "sparkier.io/dounia-hamza-2"
+          "url": "https://www.sparkier.io/xavier-bour",
+          "text": "sparkier.io/xavier-bour"
+        },
+        {
+          "url": "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data",
+          "text": "sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data"
+        },
+        {
+          "url": "https://www.sparkier.io/pierre-gall",
+          "text": "sparkier.io/pierre-gall"
+        },
+        {
+          "url": "https://www.sparkier.io/vincent-guigui",
+          "text": "sparkier.io/vincent-guigui"
+        },
+        {
+          "url": "https://www.sparkier.io/aboubackry-sow",
+          "text": "sparkier.io/aboubackry-sow"
+        },
+        {
+          "url": "https://www.sparkier.io/jean-christophe-bonetti",
+          "text": "sparkier.io/jean-christophe-bonetti"
+        },
+        {
+          "url": "https://www.sparkier.io/stephanie-vinay",
+          "text": "sparkier.io/stephanie-vinay"
+        },
+        {
+          "url": "https://www.sparkier.io/antoine-alexandre",
+          "text": "sparkier.io/antoine-alexandre"
+        },
+        {
+          "url": "https://www.sparkier.io/joevin-canet",
+          "text": "sparkier.io/joevin-canet"
+        },
+        {
+          "url": "https://www.sparkier.io/malek-bekhouche",
+          "text": "sparkier.io/malek-bekhouche"
+        },
+        {
+          "url": "https://www.sparkier.io/laurent-cruz-mermy",
+          "text": "sparkier.io/laurent-cruz-mermy"
+        },
+        {
+          "url": "https://www.sparkier.io/christophe-dri",
+          "text": "sparkier.io/christophe-dri"
+        },
+        {
+          "url": "https://www.sparkier.io/rachel-pierre-roulin",
+          "text": "sparkier.io/rachel-pierre-roulin"
+        },
+        {
+          "url": "https://www.sparkier.io/edouard-laforge",
+          "text": "sparkier.io/edouard-laforge"
+        },
+        {
+          "url": "https://www.sparkier.io/philippe-lalemant",
+          "text": "sparkier.io/philippe-lalemant"
         },
         {
           "url": "https://www.sparkier.io/pierre-varinard",
           "text": "sparkier.io/pierre-varinard"
         },
         {
-          "url": "https://www.sparkier.io/pierre-henri-tirloy",
-          "text": "sparkier.io/pierre-henri-tirloy"
+          "url": "https://www.sparkier.io/yann-lagrue",
+          "text": "sparkier.io/yann-lagrue"
         },
         {
-          "url": "https://www.sparkier.io/pascal-ta",
-          "text": "sparkier.io/pascal-ta"
-        },
-        {
-          "url": "https://www.sparkier.io/david-peltier",
-          "text": "sparkier.io/david-peltier"
-        },
-        {
-          "url": "https://www.sparkier.io/aymeric-briest",
-          "text": "sparkier.io/aymeric-briest"
-        },
-        {
-          "url": "https://www.sparkier.io/stephane-petitjean",
-          "text": "sparkier.io/stephane-petitjean"
-        },
-        {
-          "url": "https://www.sparkier.io/mathieu-thurninger",
-          "text": "sparkier.io/mathieu-thurninger"
-        },
-        {
-          "url": "https://www.sparkier.io/etienne-grosjean",
-          "text": "sparkier.io/etienne-grosjean"
-        },
-        {
-          "url": "https://www.sparkier.io/bertrand-jouin",
-          "text": "sparkier.io/bertrand-jouin"
-        },
-        {
-          "url": "https://www.sparkier.io/michael-bourdin",
-          "text": "sparkier.io/michael-bourdin"
-        },
-        {
-          "url": "https://www.sparkier.io/aurelien-jalabert",
-          "text": "sparkier.io/aurelien-jalabert"
-        },
-        {
-          "url": "https://www.sparkier.io/denis-benichou",
-          "text": "sparkier.io/denis-benichou"
-        },
-        {
-          "url": "https://www.sparkier.io/fares-kebir-2",
-          "text": "sparkier.io/fares-kebir-2"
+          "url": "https://www.sparkier.io/jennifer-damon",
+          "text": "sparkier.io/jennifer-damon"
         },
         {
           "url": "https://www.sparkier.io/sparks/try",
@@ -2650,7 +2690,7 @@
         }
       ],
       "forms": [],
-      "interactiveElementCount": 34,
+      "interactiveElementCount": 32,
       "hasScrollableSections": true,
       "landmarks": [
         "banner",
@@ -2899,11 +2939,36 @@
         "freelance conseil"
       ],
       "primaryCtas": [
-        "Commencer",
-        "Ouvrir le menu",
-        "Créer ma boutique gratuite",
-        "Voir un exemple",
-        "09:00"
+        {
+          "label": "Créer ma boutique gratuite",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Voir un exemple",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "09:00",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "10:00",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "14:00",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        }
       ]
     },
     {
@@ -2924,6 +2989,10 @@
           "text": "Hubs"
         },
         {
+          "url": "https://www.sparkier.io/romeo-fotso",
+          "text": "sparkier.io/romeo-fotso"
+        },
+        {
           "url": "https://www.sparkier.io/eleonore-mabille",
           "text": "sparkier.io/eleonore-mabille"
         },
@@ -2934,10 +3003,6 @@
         {
           "url": "https://www.sparkier.io/aurelie-perret-armand",
           "text": "sparkier.io/aurelie-perret-armand"
-        },
-        {
-          "url": "https://www.sparkier.io/jennifer-damon",
-          "text": "sparkier.io/jennifer-damon"
         },
         {
           "url": "https://www.sparkier.io/denis-benichou",
@@ -3036,6 +3101,14 @@
           "text": "sparkier.io/paul-victor-duquaire"
         },
         {
+          "url": "https://www.sparkier.io/jennifer-damon",
+          "text": "sparkier.io/jennifer-damon"
+        },
+        {
+          "url": "https://www.sparkier.io/romeo-fotso",
+          "text": "sparkier.io/romeo-fotso"
+        },
+        {
           "url": "https://www.sparkier.io/eleonore-mabille",
           "text": "sparkier.io/eleonore-mabille"
         },
@@ -3046,10 +3119,6 @@
         {
           "url": "https://www.sparkier.io/aurelie-perret-armand",
           "text": "sparkier.io/aurelie-perret-armand"
-        },
-        {
-          "url": "https://www.sparkier.io/jennifer-damon",
-          "text": "sparkier.io/jennifer-damon"
         },
         {
           "url": "https://www.sparkier.io/denis-benichou",
@@ -3146,6 +3215,10 @@
         {
           "url": "https://www.sparkier.io/paul-victor-duquaire",
           "text": "sparkier.io/paul-victor-duquaire"
+        },
+        {
+          "url": "https://www.sparkier.io/jennifer-damon",
+          "text": "sparkier.io/jennifer-damon"
         },
         {
           "url": "https://www.sparkier.io/hub/conformite-impact/facture-electronique",
@@ -3385,7 +3458,7 @@
         },
         {
           "url": "https://www.sparkier.io/sparks/mise-en-place-d-une-politique-achat-responsable",
-          "text": "Voir Mise en place d'une politique achat responsable (1-Aller plus loin)"
+          "text": "Voir Mettre en place d'une politique achat responsable (1-Aller plus loin)"
         },
         {
           "url": "https://www.sparkier.io/jennifer-damon",
@@ -3740,7 +3813,7 @@
         },
         {
           "level": 2,
-          "text": "Mise en place d'une politique achat responsable (1..."
+          "text": "Mettre en place d'une politique achat responsable..."
         },
         {
           "level": 2,
@@ -3885,11 +3958,36 @@
         "boutique conseil"
       ],
       "primaryCtas": [
-        "Connexion",
-        "Ouvrir le menu",
-        "Voir le  Spark",
-        "Scroll right",
-        "Di cuter avec notre équipe"
+        {
+          "label": "Voir le  Spark",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Scroll right",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Di cuter avec notre équipe",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Vendre votre experti e  ur Sparkier",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Connexion",
+          "elementType": "button",
+          "isInMainContent": false,
+          "priority": 0
+        }
       ]
     },
     {
@@ -4143,11 +4241,36 @@
         "business"
       ],
       "primaryCtas": [
-        "Connexion",
-        "Ouvrir le menu",
-        "Partager",
-        "Po er une que tion",
-        "Ré erver"
+        {
+          "label": "Partager",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Po er une que tion",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Ré erver",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Protégé",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        },
+        {
+          "label": "Qu'e t-ce qu'un PIA et pourquoi en ai-je be oin ?",
+          "elementType": "button",
+          "isInMainContent": true,
+          "priority": 10
+        }
       ]
     }
   ],
@@ -4276,10 +4399,10 @@
         "https://www.sparkier.io/malek-bekhouche",
         "https://www.sparkier.io/sparks/audit-de-votre-strategie-multicanale",
         "https://www.sparkier.io/yvan-zink",
-        "https://www.sparkier.io/sparks/audit-marketing-express",
-        "https://www.sparkier.io/julien-hatton",
         "https://www.sparkier.io/sparks/audit-de-marque-pour-opportunites-strategiques",
         "https://www.sparkier.io/patrick-faure",
+        "https://www.sparkier.io/sparks/audit-marketing-express",
+        "https://www.sparkier.io/julien-hatton",
         "https://www.sparkier.io/sparks/votre-strategie-commerciale-en-90-minutes-claire-et-actionnable",
         "https://www.sparkier.io/nicolas-faget",
         "https://www.sparkier.io/sparks/optimisation-organisationnelle-pour-multinationales",
@@ -4526,46 +4649,46 @@
         "https://www.sparkier.io/auth/consultants",
         "https://www.sparkier.io/profile",
         "https://www.sparkier.io/sparks/try",
-        "https://www.sparkier.io/nicolas-faget",
-        "https://www.sparkier.io/nathan-brochot",
-        "https://www.sparkier.io/alexandre-faure",
-        "https://www.sparkier.io/jennifer-damon",
-        "https://www.sparkier.io/mathieu-strabach",
-        "https://www.sparkier.io/agnes-parra",
-        "https://www.sparkier.io/dounia-hamza-2",
-        "https://www.sparkier.io/pierre-varinard",
-        "https://www.sparkier.io/pierre-henri-tirloy",
-        "https://www.sparkier.io/pascal-ta",
-        "https://www.sparkier.io/david-peltier",
-        "https://www.sparkier.io/aymeric-briest",
-        "https://www.sparkier.io/stephane-petitjean",
-        "https://www.sparkier.io/mathieu-thurninger",
         "https://www.sparkier.io/etienne-grosjean",
-        "https://www.sparkier.io/bertrand-jouin",
-        "https://www.sparkier.io/michael-bourdin",
-        "https://www.sparkier.io/aurelien-jalabert",
-        "https://www.sparkier.io/denis-benichou",
-        "https://www.sparkier.io/fares-kebir-2",
-        "https://www.sparkier.io/nicolas-faget",
-        "https://www.sparkier.io/nathan-brochot",
-        "https://www.sparkier.io/alexandre-faure",
-        "https://www.sparkier.io/jennifer-damon",
-        "https://www.sparkier.io/mathieu-strabach",
-        "https://www.sparkier.io/agnes-parra",
-        "https://www.sparkier.io/dounia-hamza-2",
+        "https://www.sparkier.io/roxane-linieres",
+        "https://www.sparkier.io/xavier-bour",
+        "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data",
+        "https://www.sparkier.io/pierre-gall",
+        "https://www.sparkier.io/vincent-guigui",
+        "https://www.sparkier.io/aboubackry-sow",
+        "https://www.sparkier.io/jean-christophe-bonetti",
+        "https://www.sparkier.io/stephanie-vinay",
+        "https://www.sparkier.io/antoine-alexandre",
+        "https://www.sparkier.io/joevin-canet",
+        "https://www.sparkier.io/malek-bekhouche",
+        "https://www.sparkier.io/laurent-cruz-mermy",
+        "https://www.sparkier.io/christophe-dri",
+        "https://www.sparkier.io/rachel-pierre-roulin",
+        "https://www.sparkier.io/edouard-laforge",
+        "https://www.sparkier.io/philippe-lalemant",
         "https://www.sparkier.io/pierre-varinard",
-        "https://www.sparkier.io/pierre-henri-tirloy",
-        "https://www.sparkier.io/pascal-ta",
-        "https://www.sparkier.io/david-peltier",
-        "https://www.sparkier.io/aymeric-briest",
-        "https://www.sparkier.io/stephane-petitjean",
-        "https://www.sparkier.io/mathieu-thurninger",
+        "https://www.sparkier.io/yann-lagrue",
+        "https://www.sparkier.io/jennifer-damon",
         "https://www.sparkier.io/etienne-grosjean",
-        "https://www.sparkier.io/bertrand-jouin",
-        "https://www.sparkier.io/michael-bourdin",
-        "https://www.sparkier.io/aurelien-jalabert",
-        "https://www.sparkier.io/denis-benichou",
-        "https://www.sparkier.io/fares-kebir-2",
+        "https://www.sparkier.io/roxane-linieres",
+        "https://www.sparkier.io/xavier-bour",
+        "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data",
+        "https://www.sparkier.io/pierre-gall",
+        "https://www.sparkier.io/vincent-guigui",
+        "https://www.sparkier.io/aboubackry-sow",
+        "https://www.sparkier.io/jean-christophe-bonetti",
+        "https://www.sparkier.io/stephanie-vinay",
+        "https://www.sparkier.io/antoine-alexandre",
+        "https://www.sparkier.io/joevin-canet",
+        "https://www.sparkier.io/malek-bekhouche",
+        "https://www.sparkier.io/laurent-cruz-mermy",
+        "https://www.sparkier.io/christophe-dri",
+        "https://www.sparkier.io/rachel-pierre-roulin",
+        "https://www.sparkier.io/edouard-laforge",
+        "https://www.sparkier.io/philippe-lalemant",
+        "https://www.sparkier.io/pierre-varinard",
+        "https://www.sparkier.io/yann-lagrue",
+        "https://www.sparkier.io/jennifer-damon",
         "https://www.sparkier.io/sparks/try",
         "https://www.sparkier.io/sparks/try",
         "https://www.sparkier.io/pricing",
@@ -4603,10 +4726,10 @@
         "https://www.sparkier.io/",
         "https://www.sparkier.io/auth/clients",
         "https://www.sparkier.io/hub",
+        "https://www.sparkier.io/romeo-fotso",
         "https://www.sparkier.io/eleonore-mabille",
         "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data",
         "https://www.sparkier.io/aurelie-perret-armand",
-        "https://www.sparkier.io/jennifer-damon",
         "https://www.sparkier.io/denis-benichou",
         "https://www.sparkier.io/maud-aubanelle",
         "https://www.sparkier.io/laurent-cruz-mermy",
@@ -4631,10 +4754,11 @@
         "https://www.sparkier.io/edouard-laforge",
         "https://www.sparkier.io/audrey-pierson",
         "https://www.sparkier.io/paul-victor-duquaire",
+        "https://www.sparkier.io/jennifer-damon",
+        "https://www.sparkier.io/romeo-fotso",
         "https://www.sparkier.io/eleonore-mabille",
         "https://www.sparkier.io/bonnemains-carole-gouvernance-pilotage-strategique-de-la-data",
         "https://www.sparkier.io/aurelie-perret-armand",
-        "https://www.sparkier.io/jennifer-damon",
         "https://www.sparkier.io/denis-benichou",
         "https://www.sparkier.io/maud-aubanelle",
         "https://www.sparkier.io/laurent-cruz-mermy",
@@ -4659,6 +4783,7 @@
         "https://www.sparkier.io/edouard-laforge",
         "https://www.sparkier.io/audrey-pierson",
         "https://www.sparkier.io/paul-victor-duquaire",
+        "https://www.sparkier.io/jennifer-damon",
         "https://www.sparkier.io/hub/conformite-impact/facture-electronique",
         "https://www.sparkier.io/sparks/oups-ma-facturation-electronique",
         "https://www.sparkier.io/clier-fabien",

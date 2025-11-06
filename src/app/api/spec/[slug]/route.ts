@@ -7,8 +7,9 @@ import { NextResponse } from 'next/server';
 
 const SPEC_DIR = join(process.cwd(), 'output', 'playwright');
 
-export async function GET(request: NextRequest, { params }: { params: { slug: string } }): Promise<NextResponse> {
-  const slug = params.slug.replace(/[^a-z0-9-]/g, '');
+export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }): Promise<NextResponse> {
+  const resolvedParams = await params;
+  const slug = resolvedParams.slug.replace(/[^a-z0-9-]/g, '');
   const filePath = join(SPEC_DIR, `${slug}.spec.ts`);
 
   try {

@@ -108,7 +108,9 @@ export const DOM_EXTRACTION_SOURCE = `
     return '';
   };
 
-  const ctaSet = new Set();
+  const ctaMap = new Map();
+  const mainContent = document.querySelector('main, [role="main"]');
+  
   interactiveElements.forEach((element) => {
     const label = extractCtaLabel(element);
     if (!label) {
@@ -123,10 +125,31 @@ export const DOM_EXTRACTION_SOURCE = `
       return;
     }
 
-    ctaSet.add(normalized);
+    // Determine element type and location
+    const isButton = element.tagName === 'BUTTON' || element.getAttribute('role') === 'button' || element.tagName === 'INPUT' && (element.type === 'button' || element.type === 'submit');
+    const isLink = element.tagName === 'A' && element.href;
+    const elementType = isButton ? 'button' : isLink ? 'link' : 'unknown';
+    
+    // Check if CTA is in main content area
+    const isInMainContent = mainContent && mainContent.contains(element);
+    
+    // Calculate priority score (CTAs in main content are preferred)
+    const priority = isInMainContent ? 10 : 0;
+    
+    // Store metadata about this CTA
+    if (!ctaMap.has(normalized) || ctaMap.get(normalized).priority < priority) {
+      ctaMap.set(normalized, {
+        label: normalized,
+        elementType,
+        isInMainContent: Boolean(isInMainContent),
+        priority,
+      });
+    }
   });
 
-  const primaryCtas = Array.from(ctaSet).slice(0, 5);
+  const primaryCtas = Array.from(ctaMap.values())
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, 5);
 
   const landmarks = [];
   if (document.querySelector('header, [role="banner"]')) landmarks.push('banner');

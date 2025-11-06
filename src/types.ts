@@ -51,6 +51,13 @@ export interface BreadcrumbEntry {
   readonly text: string;
 }
 
+export type CtaMetadata = {
+  readonly label: string;
+  readonly elementType: 'button' | 'link' | 'unknown';
+  readonly isInMainContent: boolean;
+  readonly priority: number;
+};
+
 export interface PageSummary {
   readonly url: string;
   readonly title: string;
@@ -66,7 +73,7 @@ export interface PageSummary {
   readonly schemaOrgTypes: readonly string[];
   readonly metaDescription?: string;
   readonly primaryKeywords: readonly string[];
-  readonly primaryCtas: readonly string[];
+  readonly primaryCtas: readonly CtaMetadata[];
 }
 
 export interface CrawlResult {

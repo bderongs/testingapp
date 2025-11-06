@@ -17,7 +17,7 @@ const toneClasses: Record<NonNullable<MetricsCardProps['tone']>, string> = {
   muted: 'border-slate-200 bg-white text-slate-500',
 };
 
-export const MetricsCard = ({ icon: Icon, label, value, tone = 'muted' }: MetricsCardProps): JSX.Element => (
+export const MetricsCard = ({ icon: Icon, label, value, tone = 'muted' }: MetricsCardProps) => (
   <article
     className={cn(
       'flex items-center gap-4 rounded-xl border px-4 py-3 shadow-sm transition hover:shadow-card',

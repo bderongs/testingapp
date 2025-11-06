@@ -3,6 +3,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import 'vis-network/styles/vis-network.css';
+
 :root {
   color-scheme: light;
 }

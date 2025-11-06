@@ -10,8 +10,9 @@ import { CrawlLauncher } from '@/components/ui/crawl-launcher';
 import { MetricsCard } from '@/components/ui/metrics-card';
 import { SectionTitle } from '@/components/ui/section-title';
 import { StoryCard } from '@/components/ui/story-card';
+import { SitemapVisualizer } from '@/components/ui/sitemap-visualizer';
 
-export default async function BrandPage(): Promise<JSX.Element> {
+export default async function BrandPage() {
   const data = await loadDashboardData();
 
   return (
@@ -35,6 +36,9 @@ export default async function BrandPage(): Promise<JSX.Element> {
         <MetricsCard icon={Activity} label="Unverified" value={data.summary.unverified.toString()} tone="warning" />
         <MetricsCard icon={Layers} label="Pages Crawled" value={data.summary.pageCount.toString()} tone="muted" />
       </section>
+
+      <SectionTitle title="Sitemap Visualization" subtitle="Interactive network graph showing the structure and relationships between crawled pages." />
+      <SitemapVisualizer nodes={data.sitemapNodes} edges={data.sitemapEdges} />
 
       <SectionTitle title="Run a Crawl" subtitle="Trigger the CLI without leaving the dashboard. Results refresh automatically when the crawl completes." />
       <CrawlLauncher defaultUrl={data.baseUrl === 'Unknown source' ? 'https://www.sparkier.io' : data.baseUrl} />

@@ -26,7 +26,7 @@ const formatCommentList = (heading: string, items: readonly string[]): string[] 
 const buildSpecContent = (story: UserStory): string => {
   const specLines: string[] = [];
   specLines.push('// This file is auto-generated to provide a baseline Playwright regression outline.');
-  specLines.push("import { test, expect } from '@playwright/test';");
+  specLines.push("import { test, expect } from 'playwright/test';");
   specLines.push('');
 
   const describeTitle = escapeForSingleQuote(story.title);

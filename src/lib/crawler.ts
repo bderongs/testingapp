@@ -30,7 +30,12 @@ interface DomExtractionResult {
   readonly schemaOrgTypes: readonly string[];
   readonly metaDescription?: string;
   readonly primaryKeywords: readonly string[];
-  readonly primaryCtas: readonly string[];
+  readonly primaryCtas: Array<{
+    readonly label: string;
+    readonly elementType: 'button' | 'link' | 'unknown';
+    readonly isInMainContent: boolean;
+    readonly priority: number;
+  }>;
 }
 
 const DEFAULT_MAX_PAGES = 40;

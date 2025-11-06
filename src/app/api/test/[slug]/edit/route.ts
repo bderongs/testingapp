@@ -1,0 +1,244 @@
+// This file provides an API endpoint to modify Playwright tests by editing baseline assertions using AI.
+import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import OpenAI from 'openai';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { z } from 'zod';
+
+export const runtime = 'nodejs';
+
+const requestSchema = z.object({
+  instruction: z.string().min(1, 'Instruction is required'),
+  apply: z.boolean().optional().default(false),
+  baselineAssertions: z.array(z.string()).optional(),
+});
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const SPEC_DIR = join(process.cwd(), 'output', 'playwright');
+const STORIES_FILE = join(process.cwd(), 'output', 'user-stories.json');
+const BACKUP_DIR = join(process.cwd(), 'output', 'playwright', '.backups');
+
+const ensureBackupDir = async (): Promise<void> => {
+  try {
+    await mkdir(BACKUP_DIR, { recursive: true });
+  } catch {
+    // Directory might already exist, ignore
+  }
+};
+
+const createBackup = async (specFile: string): Promise<string> => {
+  await ensureBackupDir();
+  const fileName = specFile.split('/').pop() || 'unknown.spec.ts';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = join(BACKUP_DIR, `${fileName}.${timestamp}.backup`);
+  await copyFile(specFile, backupPath);
+  return backupPath;
+};
+
+const readJson = async <T>(filePath: string, label: string): Promise<T | null> => {
+  try {
+    const content = await readFile(filePath, 'utf8');
+    return JSON.parse(content) as T;
+  } catch (error) {
+    console.error(`[edit] Failed to read ${label} from ${filePath}:`, error);
+    return null;
+  }
+};
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
+): Promise<NextResponse> {
+  const resolvedParams = await params;
+  const slug = resolvedParams.slug.replace(/[^a-z0-9-]/g, '');
+  const specFile = join(SPEC_DIR, `${slug}.spec.ts`);
+
+  try {
+    // Validate request body
+    const json = await request.json().catch(() => ({}));
+    const parse = requestSchema.safeParse(json);
+
+    if (!parse.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid payload',
+          issues: parse.error.issues,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { instruction, apply, baselineAssertions: providedAssertions } = parse.data;
+
+    // Check API key
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'OPENAI_API_KEY is not configured',
+        },
+        { status: 500 }
+      );
+    }
+
+    // Load user stories to get current assertions
+    const stories = (await readJson<Array<{ suggestedScriptName: string; baselineAssertions: string[] }>>(
+      STORIES_FILE,
+      'stories'
+    )) ?? [];
+    
+    const story = stories.find((s) => {
+      const storySlug = s.suggestedScriptName.replace(/[^a-z0-9-]/g, '');
+      return storySlug === slug;
+    });
+
+    if (!story) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Story not found',
+        },
+        { status: 404 }
+      );
+    }
+
+    const currentAssertions = providedAssertions || story.baselineAssertions;
+
+    // Create backup if applying changes
+    let backupPath: string | undefined;
+    if (apply) {
+      backupPath = await createBackup(specFile);
+    }
+
+    // Call OpenAI to modify the assertions
+    const systemPrompt = `You are a test quality expert. Your task is to modify baseline assertions (user-friendly test requirements) based on user instructions.
+
+Rules:
+1. Return ONLY a JSON array of assertion strings, no explanations
+2. Each assertion should be a clear, human-readable sentence describing what to check
+3. Keep assertions concise and testable
+4. Preserve assertions that are not being modified
+5. Format: ["Assertion 1", "Assertion 2", ...]
+
+The user will provide:
+- Current baseline assertions
+- A natural language instruction to modify them
+
+Return the modified assertions as a JSON array.`;
+
+    const userPrompt = `Current baseline assertions:
+
+${JSON.stringify(currentAssertions, null, 2)}
+
+User instruction: "${instruction}"
+
+Provide the modified baseline assertions as a JSON array:`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' },
+    });
+
+    const responseContent = completion.choices[0]?.message?.content?.trim() || '{}';
+    let modifiedAssertions: string[];
+
+    try {
+      const parsed = JSON.parse(responseContent);
+      // Handle both {assertions: [...]} and direct array
+      modifiedAssertions = Array.isArray(parsed) ? parsed : parsed.assertions || parsed.baselineAssertions || [];
+    } catch {
+      // Fallback: try to extract array from text
+      const arrayMatch = responseContent.match(/\[[\s\S]*?\]/);
+      if (arrayMatch) {
+        modifiedAssertions = JSON.parse(arrayMatch[0]);
+      } else {
+        throw new Error('Failed to parse modified assertions from AI response');
+      }
+    }
+
+    if (!Array.isArray(modifiedAssertions) || modifiedAssertions.length === 0) {
+      throw new Error('AI did not return a valid array of assertions');
+    }
+
+    // Apply changes if requested
+    if (apply) {
+      // Update the story in user-stories.json
+      const updatedStories = stories.map((s) => {
+        const storySlug = s.suggestedScriptName.replace(/[^a-z0-9-]/g, '');
+        if (storySlug === slug) {
+          return { ...s, baselineAssertions: modifiedAssertions };
+        }
+        return s;
+      });
+
+      await writeFile(STORIES_FILE, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
+
+      // Regenerate Playwright code from updated assertions
+      // Note: This is a simplified version - in production, you'd want to call the full storyBuilder
+      // For now, we'll read the current code and update it based on assertions
+      const currentCode = await readFile(specFile, 'utf8');
+      
+      // Use AI to regenerate the Playwright code from the assertions
+      const codePrompt = `You are a Playwright expert. Generate a complete Playwright test from these baseline assertions:
+
+${JSON.stringify(modifiedAssertions, null, 2)}
+
+Current test code structure:
+\`\`\`typescript
+${currentCode}
+\`\`\`
+
+Generate the complete updated Playwright test code that validates all the assertions. Keep the same structure (describe block, test block) but update the assertions to match the new baseline assertions.
+
+Return ONLY the complete code, wrapped in a markdown code block.`;
+
+      const codeCompletion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a Playwright test expert. Generate valid Playwright test code.',
+          },
+          { role: 'user', content: codePrompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 4000,
+      });
+
+      const modifiedCodeRaw = codeCompletion.choices[0]?.message?.content?.trim() || '';
+      const codeBlockMatch = modifiedCodeRaw.match(/```(?:typescript|ts)?\n([\s\S]*?)\n```/);
+      const modifiedCode = codeBlockMatch ? codeBlockMatch[1] : modifiedCodeRaw;
+
+      await writeFile(specFile, modifiedCode, 'utf8');
+    }
+
+    return NextResponse.json({
+      success: true,
+      original: currentAssertions,
+      modified: modifiedAssertions,
+      message: apply ? 'Test modified successfully' : 'Preview generated',
+      backupPath: apply ? backupPath : undefined,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Failed to modify test',
+        error: (error as Error).message,
+      },
+      { status: 500 }
+    );
+  }
+}

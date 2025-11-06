@@ -16,7 +16,7 @@ interface CrawlResponse {
   output?: string;
 }
 
-export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps): JSX.Element => {
+export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
   const [url, setUrl] = useState(defaultUrl);
   const [maxPages, setMaxPages] = useState(10);
   const [sameOriginOnly, setSameOriginOnly] = useState(true);

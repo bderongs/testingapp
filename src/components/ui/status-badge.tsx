@@ -17,7 +17,7 @@ const statusLabel: Record<StatusBadgeProps['status'], string> = {
   outdated: 'Outdated',
 };
 
-export const StatusBadge = ({ status }: StatusBadgeProps): JSX.Element => (
+export const StatusBadge = ({ status }: StatusBadgeProps) => (
   <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold', statusStyles[status])}>
     {statusLabel[status]}
   </span>
