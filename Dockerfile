@@ -50,5 +50,6 @@ EXPOSE 3000
 # Start the application
 # Use PORT from Railway environment variable, default to 3000
 ENV PORT=3000
-CMD ["next", "start"]
+# Use npm start to ensure next is found via node_modules/.bin
+CMD ["npm", "start"]
 
