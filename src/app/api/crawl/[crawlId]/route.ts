@@ -12,6 +12,17 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const OUTPUT_DIR = join(process.cwd(), 'output');
+const deriveDomain = (targetUrl: string | undefined): string => {
+  if (!targetUrl) {
+    return 'unknown-domain';
+  }
+  try {
+    const parsed = new URL(targetUrl);
+    return parsed.hostname.toLowerCase();
+  } catch {
+    return 'unknown-domain';
+  }
+};
 
 export async function GET(
   request: NextRequest,
@@ -51,9 +62,12 @@ export async function GET(
         const normalisedStatus = allowedStatuses.includes(parsed.status as CrawlSession['status'])
           ? (parsed.status as CrawlSession['status'])
           : 'running';
+        const domainCandidate = 'domain' in parsed ? (parsed as { domain?: string }).domain : undefined;
+        const domain = domainCandidate ?? deriveDomain(parsed.url);
         session = {
           id: parsed.id ?? crawlId,
           url: parsed.url ?? 'Unknown',
+          domain,
           maxPages: parsed.maxPages ?? 0,
           sameOriginOnly: parsed.sameOriginOnly ?? true,
           status: normalisedStatus,
@@ -93,6 +107,7 @@ export async function GET(
         session = {
           id: crawlId,
           url: siteMap.baseUrl || 'Unknown',
+          domain: deriveDomain(siteMap.baseUrl),
           maxPages: 0,
           sameOriginOnly: true,
           status: 'completed',
@@ -107,6 +122,7 @@ export async function GET(
           session = {
             id: crawlId,
             url: 'Unknown',
+            domain: 'unknown-domain',
             maxPages: 0,
             sameOriginOnly: true,
             status: 'running', // Assume running if directory exists but files don't

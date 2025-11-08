@@ -135,7 +135,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
     return acc;
   }, defaultSummary());
 
-  summary.pageCount = siteMap.pages.length;
+  summary.pageCount = siteMapData.pages.length;
 
   const sortedStories = [...stories].sort((a, b) => {
     if (a.verificationStatus === b.verificationStatus) {
@@ -149,10 +149,10 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
   const allUrls = new Set<string>();
   
   // Include all pages
-  siteMap.pages.forEach((page) => allUrls.add(page.url));
+  siteMapData.pages.forEach((page) => allUrls.add(page.url));
   
   // Include all edge targets to capture the full site structure
-  siteMap.edges.forEach((edge) => {
+  siteMapData.edges.forEach((edge) => {
     edge.targets.forEach((target) => allUrls.add(target));
   });
   
@@ -170,7 +170,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
     }
   });
 
-  const sitemapNodes: SitemapNode[] = siteMap.pages
+  const sitemapNodes: SitemapNode[] = siteMapData.pages
     .filter((page) => {
       // Filter out pages that are part of large categories to reduce noise
       const urlObj = new URL(page.url);
@@ -241,7 +241,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
     }
   });
 
-  const sitemapEdges: SitemapEdge[] = siteMap.edges
+  const sitemapEdges: SitemapEdge[] = siteMapData.edges
     .flatMap((edge) =>
       edge.targets.map((target) => {
         const sourceCategory = getCategory(edge.source);
