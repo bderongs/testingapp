@@ -252,6 +252,7 @@ export const StoryCard = ({ story, crawlId, domain }: StoryCardProps) => {
         storyTitle={story.title}
         baselineAssertions={story.baselineAssertions}
         crawlId={crawlId}
+        domain={domain}
       />
     </article>
   );

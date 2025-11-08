@@ -75,11 +75,21 @@ export const DomainSwitcher = ({ domains, selectedDomain, crawlHistory, activeCr
           disabled={isPending || (selectedDomain === null && crawlHistory.length === 0)}
         >
           <option value="">Latest snapshot</option>
-          {crawlHistory.map((crawl) => (
-            <option key={crawl.id} value={crawl.id}>
-              {crawl.createdAt ? new Date(crawl.createdAt).toLocaleString() : crawl.id} · {crawl.status ?? 'completed'}
-            </option>
-          ))}
+          {crawlHistory.map((crawl) => {
+            const isoLabel =
+              crawl.createdAt ??
+              crawl.completedAt ??
+              null;
+            const formatted = isoLabel
+              ? new Date(isoLabel).toISOString().replace('T', ' ').slice(0, 19)
+              : crawl.id;
+
+            return (
+              <option key={crawl.id} value={crawl.id}>
+                {formatted} · {crawl.status ?? 'completed'}
+              </option>
+            );
+          })}
         </select>
       </label>
     </div>

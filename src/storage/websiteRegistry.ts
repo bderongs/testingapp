@@ -220,13 +220,19 @@ export const listCrawlSummaries = async (domain: string): Promise<CrawlSummary[]
     });
   }
 
-  summaries.sort((a, b) => {
+  const uniqueSummaries = new Map<string, CrawlSummary>();
+  for (const summary of summaries) {
+    const existing = uniqueSummaries.get(summary.crawlId);
+    if (!existing || summary.isLatest) {
+      uniqueSummaries.set(summary.crawlId, summary);
+    }
+  }
+
+  return Array.from(uniqueSummaries.values()).sort((a, b) => {
     const aTime = a.completedAt ?? a.createdAt ?? '';
     const bTime = b.completedAt ?? b.createdAt ?? '';
     return aTime < bTime ? 1 : -1;
   });
-
-  return summaries;
 };
 
 export const getLatestCrawlDirectory = async (domain: string): Promise<string | null> => {

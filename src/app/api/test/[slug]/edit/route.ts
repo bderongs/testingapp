@@ -1,10 +1,13 @@
 // This file provides an API endpoint to modify Playwright tests by editing baseline assertions using AI.
 import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
+
+import { findDomainForCrawl } from '@/lib/websites';
+import { logger } from '@/utils/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic'; // Prevent static generation at build time
@@ -31,8 +34,9 @@ const getOpenAIClient = async () => {
 };
 
 const OUTPUT_DIR = join(process.cwd(), 'output');
-const SPEC_DIR = join(OUTPUT_DIR, 'playwright');
-const STORIES_FILE = join(OUTPUT_DIR, 'user-stories.json');
+const DOMAINS_ROOT = join(OUTPUT_DIR, 'domains');
+const LEGACY_SPEC_DIR = join(OUTPUT_DIR, 'playwright');
+const LEGACY_STORIES_FILE = join(OUTPUT_DIR, 'user-stories.json');
 
 /**
  * Finds the most recent crawl ID by scanning output directories.
@@ -64,21 +68,20 @@ const findLatestCrawlId = async (): Promise<string | null> => {
     return null;
   }
 };
-const BACKUP_DIR = join(process.cwd(), 'output', 'playwright', '.backups');
-
-const ensureBackupDir = async (): Promise<void> => {
+const ensureDir = async (targetDir: string): Promise<void> => {
   try {
-    await mkdir(BACKUP_DIR, { recursive: true });
+    await mkdir(targetDir, { recursive: true });
   } catch {
     // Directory might already exist, ignore
   }
 };
 
 const createBackup = async (specFile: string): Promise<string> => {
-  await ensureBackupDir();
+  const backupDir = join(dirname(specFile), '.backups');
+  await ensureDir(backupDir);
   const fileName = specFile.split('/').pop() || 'unknown.spec.ts';
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = join(BACKUP_DIR, `${fileName}.${timestamp}.backup`);
+  const backupPath = join(backupDir, `${fileName}.${timestamp}.backup`);
   await copyFile(specFile, backupPath);
   return backupPath;
 };
@@ -88,9 +91,59 @@ const readJson = async <T>(filePath: string, label: string): Promise<T | null> =
     const content = await readFile(filePath, 'utf8');
     return JSON.parse(content) as T;
   } catch (error) {
-    console.error(`[edit] Failed to read ${label} from ${filePath}:`, error);
+    logger.error(`[test-edit] Failed to read ${label} from ${filePath}: ${(error as Error).message}`);
     return null;
   }
+};
+
+const sanitizeCrawlId = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const sanitizeDomain = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase();
+  return /^[a-z0-9.-]+$/.test(trimmed) ? trimmed : null;
+};
+
+const getLatestDomainCrawlId = async (domain: string): Promise<string | null> => {
+  const latestSession = join(DOMAINS_ROOT, domain, 'latest', 'session.json');
+  const session = await readJson<{ id?: string }>(latestSession, 'latest session');
+  return session?.id ?? null;
+};
+
+const resolvePaths = async (domain: string | null, crawlId: string | null) => {
+  if (domain) {
+    const baseDir = crawlId
+      ? join(DOMAINS_ROOT, domain, 'crawls', crawlId)
+      : join(DOMAINS_ROOT, domain, 'latest');
+    return {
+      baseDir,
+      storiesFile: join(baseDir, 'user-stories.json'),
+      specDir: join(baseDir, 'playwright'),
+    };
+  }
+
+  if (crawlId) {
+    const baseDir = join(OUTPUT_DIR, crawlId);
+    return {
+      baseDir,
+      storiesFile: join(baseDir, 'user-stories.json'),
+      specDir: join(baseDir, 'playwright'),
+    };
+  }
+
+  return {
+    baseDir: OUTPUT_DIR,
+    storiesFile: LEGACY_STORIES_FILE,
+    specDir: LEGACY_SPEC_DIR,
+  };
 };
 
 export async function POST(
@@ -110,16 +163,32 @@ export async function POST(
 
   const resolvedParams = await params;
   const slug = resolvedParams.slug.replace(/[^a-z0-9-]/g, '');
-  
-  // Get crawlId from query parameter or use latest crawl
-  const url = new URL(request.url);
-  const crawlIdParam = url.searchParams.get('crawlId');
-  const crawlId = crawlIdParam || await findLatestCrawlId();
-  
-  // Determine which directory to use
-  const crawlDir = crawlId ? join(OUTPUT_DIR, crawlId) : OUTPUT_DIR;
-  const specDir = crawlId ? join(crawlDir, 'playwright') : SPEC_DIR;
+  const requestUrl = new URL(request.url);
+  const requestedCrawlId = sanitizeCrawlId(requestUrl.searchParams.get('crawlId'));
+  let domain = sanitizeDomain(requestUrl.searchParams.get('domain'));
+  if (!domain && requestedCrawlId) {
+    domain = await findDomainForCrawl(requestedCrawlId);
+  }
+
+  let crawlId = requestedCrawlId;
+  if (domain && !crawlId) {
+    crawlId = await getLatestDomainCrawlId(domain);
+  }
+  if (!domain && !crawlId) {
+    crawlId = await findLatestCrawlId();
+  }
+
+  const paths = await resolvePaths(domain, crawlId);
+  const specDir = paths.specDir;
   const specFile = join(specDir, `${slug}.spec.ts`);
+  const storiesFilePath = paths.storiesFile;
+const baseDir = paths.baseDir;
+
+  logger.info(
+    `[test-edit] Received request slug=${slug} domain=${domain ?? 'legacy'} crawlId=${
+      crawlId ?? 'latest'
+    } specDir=${specDir}`
+  );
 
   try {
     // Validate request body
@@ -154,19 +223,9 @@ export async function POST(
       );
     }
 
-    // Get crawlId from query parameter or use latest crawl
-    const url = new URL(request.url);
-    const crawlIdParam = url.searchParams.get('crawlId');
-    const crawlId = crawlIdParam || await findLatestCrawlId();
-    
-    // Determine which directory to use
-    const crawlDir = crawlId ? join(OUTPUT_DIR, crawlId) : OUTPUT_DIR;
-    const storiesFile = crawlId ? join(crawlDir, 'user-stories.json') : STORIES_FILE;
-    const specDir = crawlId ? join(crawlDir, 'playwright') : SPEC_DIR;
-
     // Load user stories to get current assertions
     const stories = (await readJson<Array<{ suggestedScriptName: string; baselineAssertions: string[] }>>(
-      storiesFile,
+      storiesFilePath,
       'stories'
     )) ?? [];
     
@@ -191,6 +250,7 @@ export async function POST(
     let backupPath: string | undefined;
     if (apply) {
       backupPath = await createBackup(specFile);
+      logger.info(`[test-edit] Backup created at ${backupPath}`);
     }
 
     // Call OpenAI to modify the assertions
@@ -260,8 +320,9 @@ Provide the modified baseline assertions as a JSON array:`;
         return s;
       });
 
-      const storiesFile = crawlId ? join(crawlDir, 'user-stories.json') : STORIES_FILE;
-      await writeFile(storiesFile, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
+      await ensureDir(dirname(storiesFilePath));
+      await writeFile(storiesFilePath, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
+      logger.info(`[test-edit] Updated user stories at ${storiesFilePath}`);
 
       // Regenerate Playwright code from updated assertions
       // Note: This is a simplified version - in production, you'd want to call the full storyBuilder
@@ -299,8 +360,34 @@ Return ONLY the complete code, wrapped in a markdown code block.`;
       const codeBlockMatch = modifiedCodeRaw.match(/```(?:typescript|ts)?\n([\s\S]*?)\n```/);
       const modifiedCode = codeBlockMatch ? codeBlockMatch[1] : modifiedCodeRaw;
 
+      await ensureDir(specDir);
       await writeFile(specFile, modifiedCode, 'utf8');
+
+      if (domain) {
+        const latestDir = join(DOMAINS_ROOT, domain, 'latest');
+        const latestStories = join(latestDir, 'user-stories.json');
+        const latestSpecDir = join(latestDir, 'playwright');
+        await ensureDir(latestDir);
+        await ensureDir(latestSpecDir);
+        await writeFile(latestStories, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
+        const latestSpecFile = join(latestSpecDir, `${slug}.spec.ts`);
+        await writeFile(latestSpecFile, modifiedCode, 'utf8');
+        logger.info(`[test-edit] Synced changes to latest snapshot at ${latestDir}`);
+      } else if (crawlId) {
+        const legacyStories = join(OUTPUT_DIR, crawlId, 'user-stories.json');
+        const legacySpecDir = join(OUTPUT_DIR, crawlId, 'playwright');
+        await ensureDir(legacySpecDir);
+        await writeFile(legacyStories, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
+        await writeFile(join(legacySpecDir, `${slug}.spec.ts`), modifiedCode, 'utf8');
+        logger.info(`[test-edit] Synced changes to legacy crawl at ${legacySpecDir}`);
+      }
     }
+
+    logger.info(
+      `[test-edit] ${apply ? 'Applied' : 'Previewed'} changes for slug=${slug} domain=${
+        domain ?? 'legacy'
+      } crawlId=${crawlId ?? 'latest'}`
+    );
 
     return NextResponse.json({
       success: true,
@@ -310,6 +397,11 @@ Return ONLY the complete code, wrapped in a markdown code block.`;
       backupPath: apply ? backupPath : undefined,
     });
   } catch (error) {
+    logger.error(
+      `[test-edit] Failed to modify slug=${slug} domain=${domain ?? 'legacy'} crawlId=${
+        crawlId ?? 'latest'
+      }: ${(error as Error).message}`
+    );
     return NextResponse.json(
       {
         success: false,

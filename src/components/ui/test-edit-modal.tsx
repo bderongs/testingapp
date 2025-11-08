@@ -11,6 +11,7 @@ interface TestEditModalProps {
   storyTitle: string;
   baselineAssertions: readonly string[];
   crawlId?: string;
+  domain?: string | null;
 }
 
 interface EditResponse {
@@ -22,7 +23,7 @@ interface EditResponse {
   backupPath?: string;
 }
 
-export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineAssertions, crawlId }: TestEditModalProps) => {
+export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineAssertions, crawlId, domain }: TestEditModalProps) => {
   const [instruction, setInstruction] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [preview, setPreview] = useState<EditResponse | null>(null);
@@ -36,7 +37,14 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
   const loadPlaywrightCode = async () => {
     if (playwrightCode) return;
     try {
-      const response = await fetch(`/api/spec/${specSlug}`);
+      const specUrl = new URL(`/api/spec/${specSlug}`, window.location.origin);
+      if (crawlId) {
+        specUrl.searchParams.set('crawlId', crawlId);
+      }
+      if (domain) {
+        specUrl.searchParams.set('domain', domain);
+      }
+      const response = await fetch(specUrl.toString());
       if (response.ok) {
         const code = await response.text();
         setPlaywrightCode(code);
@@ -60,6 +68,9 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
       const url = new URL(`/api/test/${specSlug}/edit`, window.location.origin);
       if (crawlId) {
         url.searchParams.set('crawlId', crawlId);
+      }
+      if (domain) {
+        url.searchParams.set('domain', domain);
       }
       const response = await fetch(url.toString(), {
         method: 'POST',
@@ -90,6 +101,9 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
       const url = new URL(`/api/test/${specSlug}/edit`, window.location.origin);
       if (crawlId) {
         url.searchParams.set('crawlId', crawlId);
+      }
+      if (domain) {
+        url.searchParams.set('domain', domain);
       }
       const response = await fetch(url.toString(), {
         method: 'POST',
