@@ -1,5 +1,7 @@
 // This file exposes an API endpoint that runs the Sparkier CLI crawler from the Next.js UI.
 import { spawn } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
+import type { WriteStream } from 'node:fs';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -9,6 +11,7 @@ import { z } from 'zod';
 import {
   createCrawlSession,
   completeCrawlSession,
+  persistCrawlSessionSnapshot,
 } from '@/lib/crawlManager';
 import type { Cookie } from '@/types';
 
@@ -34,11 +37,12 @@ const requestSchema = z.object({
 
 const runCrawler = (
   args: string[],
-  crawlId: string,
+  session: { id: string; domain: string },
   cookies?: readonly Cookie[]
 ): Promise<{ code: number; output: string }> =>
   new Promise(async (resolve) => {
     let cookiesFilePath: string | null = null;
+    let logStream: WriteStream | null = null;
 
     try {
       // If cookies are provided, write them to a temporary file
@@ -49,12 +53,32 @@ const runCrawler = (
         } catch {
           // Directory might already exist, ignore
         }
-        cookiesFilePath = join(tmpDir, `cookies-${crawlId}.json`);
+        cookiesFilePath = join(tmpDir, `cookies-${session.id}.json`);
         await writeFile(cookiesFilePath, JSON.stringify(cookies), 'utf-8');
         args.push(`--cookies-file=${cookiesFilePath}`);
       }
 
-      const child = spawn('npm', ['run', 'dev:cli', '--', ...args, `--crawl-id=${crawlId}`], {
+      const crawlDir = join(process.cwd(), 'output', session.domain, 'crawls', session.id);
+      await mkdir(crawlDir, { recursive: true });
+      const logPath = join(crawlDir, 'crawl.log');
+      try {
+        logStream = createWriteStream(logPath, { flags: 'a' });
+      } catch (error) {
+        console.warn(`[crawl route] Failed to open log stream for ${logPath}: ${(error as Error).message}`);
+        logStream = null;
+      }
+      const appendLog = (chunk: unknown): void => {
+        if (!logStream) {
+          return;
+        }
+        const payload = typeof chunk === 'string' ? chunk : chunk instanceof Buffer ? chunk.toString('utf8') : '';
+        if (!payload) {
+          return;
+        }
+        logStream.write(`${new Date().toISOString()} ${payload}`);
+      };
+
+      const child = spawn('npm', ['run', 'dev:cli', '--', ...args, `--crawl-id=${session.id}`], {
         cwd: process.cwd(),
         shell: process.platform === 'win32',
       });
@@ -62,10 +86,12 @@ const runCrawler = (
 
       child.stdout.on('data', (chunk) => {
         output += chunk.toString();
+        appendLog(chunk);
       });
 
       child.stderr.on('data', (chunk) => {
         output += chunk.toString();
+        appendLog(chunk);
       });
 
       child.on('close', async (code) => {
@@ -77,6 +103,9 @@ const runCrawler = (
             // Ignore cleanup errors
           }
         }
+        if (logStream) {
+          logStream.end(`${new Date().toISOString()} Crawl process exited with code ${code ?? 1}\n`);
+        }
         resolve({ code: code ?? 1, output });
       });
     } catch (error) {
@@ -86,6 +115,19 @@ const runCrawler = (
           await unlink(cookiesFilePath);
         } catch {
           // Ignore cleanup errors
+        }
+      }
+      if (logStream) {
+        logStream.end(`${new Date().toISOString()} Failed to launch crawler: ${(error as Error).message}\n`);
+      } else {
+        try {
+          const fallbackDir = join(process.cwd(), 'output', session.domain, 'crawls', session.id);
+          await mkdir(fallbackDir, { recursive: true });
+          const logPath = join(fallbackDir, 'crawl.log');
+          const fallbackStream = createWriteStream(logPath, { flags: 'a' });
+          fallbackStream.end(`${new Date().toISOString()} Failed to launch crawler: ${(error as Error).message}\n`);
+        } catch {
+          // Ignore log persistence failures
         }
       }
       resolve({ code: 1, output: (error as Error).message });
@@ -123,6 +165,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const { session, queued } = sessionResult;
+  try {
+    await persistCrawlSessionSnapshot(session);
+  } catch (error) {
+    console.warn(`[crawl route] Failed to persist session snapshot for ${session.id}: ${(error as Error).message}`);
+  }
 
   // If queued, return immediately with the crawl ID
   if (queued) {
@@ -130,6 +177,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       success: true,
       message: 'Crawl queued. It will start automatically when a slot becomes available.',
       crawlId: session.id,
+      domain: session.domain,
       queued: true,
       status: 'pending',
     });
@@ -138,7 +186,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Run crawler asynchronously
   runCrawler(
     [`--url=${url}`, `--max-pages=${maxPages}`, `--same-origin-only=${sameOriginOnly}`],
-    session.id,
+    session,
     cookies
   )
     .then(({ code, output }) => {
@@ -156,6 +204,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     success: true,
     message: 'Crawl started successfully.',
     crawlId: session.id,
+    domain: session.domain,
     queued: false,
     status: 'running',
   });

@@ -1,10 +1,15 @@
-// This file manages concurrent crawls with unique IDs and limits the number of simultaneous crawls.
+// This file manages concurrent crawls with unique IDs, persists session metadata, and limits the number of simultaneous crawls.
 
 import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { syncCrawlSessionRecord } from '@/storage/siteRegistry';
 
 export interface CrawlSession {
   id: string;
   url: string;
+  domain: string;
   maxPages: number;
   sameOriginOnly: boolean;
   status: 'pending' | 'running' | 'completed' | 'failed';
@@ -19,6 +24,49 @@ const MAX_CONCURRENT_CRAWLS = 3;
 // In-memory store of active crawls
 const activeCrawls = new Map<string, CrawlSession>();
 const crawlQueue: CrawlSession[] = [];
+const OUTPUT_DIR = join(process.cwd(), 'output');
+
+const buildSessionPayload = (session: CrawlSession): string =>
+  JSON.stringify(
+    {
+      id: session.id,
+      url: session.url,
+      domain: session.domain,
+      maxPages: session.maxPages,
+      sameOriginOnly: session.sameOriginOnly,
+      status: session.status,
+      createdAt: session.createdAt.toISOString(),
+      completedAt: session.completedAt ? session.completedAt.toISOString() : null,
+      error: session.error ?? null,
+    },
+    null,
+    2
+  );
+
+const ensureDomain = (targetUrl: string): string => {
+  try {
+    const parsed = new URL(targetUrl);
+    return parsed.hostname.toLowerCase();
+  } catch {
+    return 'unknown-domain';
+  }
+};
+
+const getSessionDir = (session: CrawlSession): string =>
+  join(OUTPUT_DIR, 'domains', session.domain, 'crawls', session.id);
+
+export const persistCrawlSessionSnapshot = async (session: CrawlSession): Promise<void> => {
+  const crawlDir = getSessionDir(session);
+  await mkdir(crawlDir, { recursive: true });
+  await writeFile(join(crawlDir, 'session.json'), `${buildSessionPayload(session)}\n`);
+
+  // Maintain legacy layout for backwards compatibility
+  const legacyDir = join(OUTPUT_DIR, session.id);
+  await mkdir(legacyDir, { recursive: true });
+  await writeFile(join(legacyDir, 'session.json'), `${buildSessionPayload(session)}\n`);
+
+  void syncCrawlSessionRecord(session);
+};
 
 /**
  * Creates a new crawl session and returns its ID.
@@ -38,6 +86,7 @@ export const createCrawlSession = (
     const session: CrawlSession = {
       id: randomUUID(),
       url,
+      domain: ensureDomain(url),
       maxPages,
       sameOriginOnly,
       status: 'pending',
@@ -45,6 +94,7 @@ export const createCrawlSession = (
     };
     crawlQueue.push(session);
     activeCrawls.set(session.id, session);
+    void syncCrawlSessionRecord(session);
     return { session, queued: true };
   }
 
@@ -52,12 +102,14 @@ export const createCrawlSession = (
   const session: CrawlSession = {
     id: randomUUID(),
     url,
+    domain: ensureDomain(url),
     maxPages,
     sameOriginOnly,
     status: 'running',
     createdAt: new Date(),
   };
   activeCrawls.set(session.id, session);
+  void syncCrawlSessionRecord(session);
   return { session, queued: false };
 };
 
@@ -78,6 +130,7 @@ export const completeCrawlSession = (crawlId: string, success: boolean, error?: 
 
   // Process next crawl in queue
   processNextCrawl();
+  void persistCrawlSessionSnapshot(session);
 };
 
 /**
@@ -95,6 +148,7 @@ const processNextCrawl = (): void => {
   const nextCrawl = crawlQueue.shift();
   if (nextCrawl) {
     nextCrawl.status = 'running';
+    void persistCrawlSessionSnapshot(nextCrawl);
   }
 };
 

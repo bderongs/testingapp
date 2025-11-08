@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import { getCrawlSession } from '@/lib/crawlManager';
+import type { CrawlSession } from '@/lib/crawlManager';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,13 +28,67 @@ export async function GET(
   if (!session) {
     const crawlDir = join(OUTPUT_DIR, crawlId);
     try {
-      const [siteMapExists, storiesExists] = await Promise.all([
+      const [sessionSnapshot, siteMapExists, storiesExists] = await Promise.all([
+        readFile(join(crawlDir, 'session.json'), 'utf8').catch(() => null),
         readFile(join(crawlDir, 'site-map.json'), 'utf8').catch(() => null),
         readFile(join(crawlDir, 'user-stories.json'), 'utf8').catch(() => null),
       ]);
 
       // If files exist, create a synthetic session
-      if (siteMapExists && storiesExists) {
+      if (sessionSnapshot) {
+        try {
+          const allowedStatuses: CrawlSession['status'][] = ['pending', 'running', 'completed', 'failed'];
+        const parsed = JSON.parse(sessionSnapshot) as {
+          id?: string;
+          url?: string;
+          maxPages?: number;
+          sameOriginOnly?: boolean;
+          status?: string;
+          createdAt?: string;
+          completedAt?: string | null;
+          error?: string | null;
+        };
+        const normalisedStatus = allowedStatuses.includes(parsed.status as CrawlSession['status'])
+          ? (parsed.status as CrawlSession['status'])
+          : 'running';
+        session = {
+          id: parsed.id ?? crawlId,
+          url: parsed.url ?? 'Unknown',
+          maxPages: parsed.maxPages ?? 0,
+          sameOriginOnly: parsed.sameOriginOnly ?? true,
+          status: normalisedStatus,
+          createdAt: parsed.createdAt ? new Date(parsed.createdAt) : new Date(),
+          completedAt: parsed.completedAt ? new Date(parsed.completedAt) : undefined,
+          error: parsed.error ?? undefined,
+        };
+        if (session.status === 'completed') {
+          const [siteMapContent, storiesContent] = await Promise.all([
+            readFile(join(crawlDir, 'site-map.json'), 'utf8').catch(() => null),
+            readFile(join(crawlDir, 'user-stories.json'), 'utf8').catch(() => null),
+          ]);
+          if (siteMapContent && storiesContent) {
+            return NextResponse.json({
+              success: true,
+              session: {
+                id: session.id,
+                url: session.url,
+                status: session.status,
+                createdAt: session.createdAt.toISOString(),
+                completedAt: session.completedAt?.toISOString(),
+              },
+              data: {
+                siteMap: JSON.parse(siteMapContent),
+                userStories: JSON.parse(storiesContent),
+              },
+            });
+          }
+        }
+        } catch {
+          // Ignore malformed snapshot and fall back to file heuristics
+        }
+      }
+
+      if (!session && siteMapExists && storiesExists) {
         const siteMap = JSON.parse(siteMapExists);
         session = {
           id: crawlId,
@@ -41,7 +96,7 @@ export async function GET(
           maxPages: 0,
           sameOriginOnly: true,
           status: 'completed',
-          createdAt: new Date(), // We don't have the real date, use current
+          createdAt: new Date(),
           completedAt: new Date(),
         };
       } else {

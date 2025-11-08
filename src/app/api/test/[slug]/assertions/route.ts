@@ -1,46 +1,18 @@
 // This file provides an API endpoint to validate baseline assertions individually using Playwright.
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { writeFile, mkdir } from 'node:fs/promises';
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { findDomainForCrawl } from '@/lib/websites';
+
 export const runtime = 'nodejs';
 
 const OUTPUT_DIR = join(process.cwd(), 'output');
-const SPEC_DIR = join(OUTPUT_DIR, 'playwright');
-
-/**
- * Finds the most recent crawl ID by scanning output directories.
- */
-const findLatestCrawlId = async (): Promise<string | null> => {
-  try {
-    const entries = await readdir(OUTPUT_DIR, { withFileTypes: true });
-    const crawlDirs = entries.filter((entry) => entry.isDirectory() && entry.name !== 'playwright');
-    
-    let latestCrawlId: string | null = null;
-    let latestTime = 0;
-
-    for (const dir of crawlDirs) {
-      const storiesFile = join(OUTPUT_DIR, dir.name, 'user-stories.json');
-      try {
-        const stats = await stat(storiesFile);
-        if (stats.mtimeMs > latestTime) {
-          latestTime = stats.mtimeMs;
-          latestCrawlId = dir.name;
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    return latestCrawlId;
-  } catch {
-    return null;
-  }
-};
+const DOMAINS_ROOT = join(OUTPUT_DIR, 'domains');
+const LEGACY_SPEC_DIR = join(OUTPUT_DIR, 'playwright');
 
 const readJson = async <T>(filePath: string): Promise<T | null> => {
   try {
@@ -232,6 +204,22 @@ const runAssertionTest = (specFile: string): Promise<{ code: number; output: str
     });
   });
 
+const sanitizeCrawlId = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const sanitizeDomain = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase();
+  return /^[a-z0-9.-]+$/.test(trimmed) ? trimmed : null;
+};
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -242,13 +230,30 @@ export async function POST(
   try {
     // Get crawlId from query parameter or use latest crawl
     const url = new URL(request.url);
-    const crawlIdParam = url.searchParams.get('crawlId');
-    const crawlId = crawlIdParam || await findLatestCrawlId();
+    const crawlId = sanitizeCrawlId(url.searchParams.get('crawlId'));
+    let domain = sanitizeDomain(url.searchParams.get('domain'));
+
+    if (!domain && crawlId) {
+      domain = await findDomainForCrawl(crawlId);
+    }
     
-    // Determine which directory to use
-    const crawlDir = crawlId ? join(OUTPUT_DIR, crawlId) : OUTPUT_DIR;
-    const storiesFile = join(crawlDir, 'user-stories.json');
-    const specDir = crawlId ? join(crawlDir, 'playwright') : SPEC_DIR;
+    let storiesFile: string;
+    let specDir: string;
+
+    if (domain) {
+      const baseDir = crawlId
+        ? join(DOMAINS_ROOT, domain, 'crawls', crawlId)
+        : join(DOMAINS_ROOT, domain, 'latest');
+      storiesFile = join(baseDir, 'user-stories.json');
+      specDir = join(baseDir, 'playwright');
+    } else if (crawlId) {
+      const crawlDir = join(OUTPUT_DIR, crawlId);
+      storiesFile = join(crawlDir, 'user-stories.json');
+      specDir = join(crawlDir, 'playwright');
+    } else {
+      storiesFile = join(OUTPUT_DIR, 'user-stories.json');
+      specDir = LEGACY_SPEC_DIR;
+    }
 
     // Load stories from the correct directory
     const stories = (await readJson<Array<{

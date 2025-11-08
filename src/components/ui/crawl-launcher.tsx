@@ -1,11 +1,13 @@
 // This file renders a client-side form that triggers the Sparkier crawler via the Next.js API.
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Loader2, Play } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import type { Cookie } from '@/types';
+
+type TimerHandle = ReturnType<typeof setTimeout>;
 
 interface CrawlLauncherProps {
   defaultUrl: string;
@@ -30,6 +32,23 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
   const [cookiesJson, setCookiesJson] = useState('');
   const [cookiesError, setCookiesError] = useState<string | null>(null);
   const [cookiesPreview, setCookiesPreview] = useState<number | null>(null);
+  const pollTimerRef = useRef<TimerHandle | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
 
   const pollCrawlStatus = async (crawlId: string) => {
     const maxAttempts = 120; // 10 minutes max (5s intervals)
@@ -85,11 +104,14 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
 
         if (status === 'completed' && data.data) {
           // Crawl completed, redirect to results
-          window.location.href = `/?crawlId=${crawlId}`;
+          stopPolling();
+          setIsSubmitting(false);
+          window.location.assign(`/brand?crawlId=${crawlId}`);
           return;
         }
 
         if (status === 'failed') {
+          stopPolling();
           setResult({
             success: false,
             message: 'Crawl failed. Please try again.',
@@ -102,8 +124,11 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
 
         attempts++;
         if (attempts < maxAttempts && (status === 'running' || status === 'pending')) {
-          setTimeout(poll, 5000); // Poll every 5 seconds
+          const delay = attempts < 5 ? 2000 : 5000;
+          stopPolling();
+          pollTimerRef.current = setTimeout(poll, delay); // Poll every few seconds
         } else if (attempts >= maxAttempts) {
+          stopPolling();
           setResult({
             success: false,
             message: 'Crawl is taking longer than expected. Please check back later.',
@@ -118,10 +143,12 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
           crawlId,
         });
         setIsSubmitting(false);
+        stopPolling();
       }
     };
 
-    setTimeout(poll, 1000); // Start polling after 1 second
+    stopPolling();
+    pollTimerRef.current = setTimeout(poll, 1000); // Start polling after 1 second
   };
 
   /**

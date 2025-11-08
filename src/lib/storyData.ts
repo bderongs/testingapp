@@ -1,13 +1,17 @@
 // This file loads crawl output from the filesystem and prepares dashboard-ready data structures.
-import { readFile, stat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { StoryKind, UserStory } from '@/types';
 import { sanitizeFileSlug } from '@/lib/sanitize';
-
-const OUTPUT_DIR = join(process.cwd(), 'output');
-const STORIES_FILE = join(OUTPUT_DIR, 'user-stories.json');
-const SITE_MAP_FILE = join(OUTPUT_DIR, 'site-map.json');
+import {
+  listWebsites,
+  listCrawlsForDomain,
+  loadCrawlArtifacts,
+  loadWebsiteMetadata,
+  findDomainForCrawl,
+  type WebsiteSummary,
+  type CrawlSummary,
+} from '@/lib/websites';
 
 interface StorySummary {
   byKind: Record<StoryKind, number>;
@@ -39,6 +43,10 @@ interface DashboardData {
   stories: StoryWithSpec[];
   sitemapNodes: SitemapNode[];
   sitemapEdges: SitemapEdge[];
+  activeCrawlId: string | null;
+  selectedDomain: string | null;
+  availableDomains: WebsiteSummary[];
+  crawlHistory: CrawlSummary[];
 }
 
 const defaultSummary = (): StorySummary => ({
@@ -52,91 +60,69 @@ const defaultSummary = (): StorySummary => ({
   pageCount: 0,
 });
 
-const readJson = async <T>(filePath: string, label: string): Promise<T | null> => {
-  try {
-    const raw = await readFile(filePath, 'utf8');
-    const parsed = JSON.parse(raw) as T;
-    console.info(`[storyData] Loaded ${label} (${filePath})`);
-    return parsed;
-  } catch (error) {
-    console.warn(`[storyData] Failed to load ${label} (${filePath}):`, (error as Error).message);
-    return null;
-  }
-};
-
-const getGeneratedAtLabel = async (crawlDir: string, storiesFile: string): Promise<string> => {
-  try {
-    const fileStat = await stat(storiesFile);
-    return `Generated ${fileStat.mtime.toLocaleString()}`;
-  } catch {
-    return 'No crawl artifacts detected';
-  }
-};
-
-const buildSpecMetadata = (story: UserStory): { specSlug: string; specHref: string } => {
+const buildSpecMetadata = (
+  story: UserStory,
+  domain: string,
+  crawlId: string | null
+): { specSlug: string; specHref: string } => {
   const slug = sanitizeFileSlug(story.suggestedScriptName, story.id);
+  const searchParams = new URLSearchParams({ domain });
+  if (crawlId) {
+    searchParams.set('crawlId', crawlId);
+  }
   return {
     specSlug: slug,
-    specHref: `/api/spec/${slug}`,
+    specHref: `/api/spec/${slug}?${searchParams.toString()}`,
   };
 };
 
-/**
- * Finds the most recent crawl ID by scanning output directories.
- * Returns the crawlId of the directory with the most recent user-stories.json file.
- */
-const findLatestCrawlId = async (): Promise<string | null> => {
-  try {
-    const entries = await readdir(OUTPUT_DIR, { withFileTypes: true });
-    const crawlDirs = entries.filter((entry) => entry.isDirectory() && entry.name !== 'playwright');
-    
-    let latestCrawlId: string | null = null;
-    let latestTime = 0;
-
-    for (const dir of crawlDirs) {
-      const storiesFile = join(OUTPUT_DIR, dir.name, 'user-stories.json');
-      try {
-        const stats = await stat(storiesFile);
-        if (stats.mtimeMs > latestTime) {
-          latestTime = stats.mtimeMs;
-          latestCrawlId = dir.name;
-        }
-      } catch {
-        // File doesn't exist, skip this directory
-        continue;
-      }
-    }
-
-    return latestCrawlId;
-  } catch {
-    return null;
-  }
-};
+interface LoadDashboardOptions {
+  domain?: string;
+  crawlId?: string;
+}
 
 /**
- * Loads dashboard data from a specific crawl ID or from the most recent crawl.
- * If crawlId is provided, loads from output/{crawlId}/.
- * If no crawlId is provided, finds and loads the most recent crawl.
- * Falls back to output/ (legacy mode) if no crawl directories are found.
+ * Loads dashboard data for a domain, optionally scoped to a specific crawl.
  */
-export const loadDashboardData = async (crawlId?: string): Promise<DashboardData> => {
-  // If no crawlId provided, find the latest crawl
-  let targetCrawlId = crawlId;
-  if (!targetCrawlId) {
-    targetCrawlId = await findLatestCrawlId() || undefined;
+export const loadDashboardData = async (options: LoadDashboardOptions = {}): Promise<DashboardData> => {
+  const websites = await listWebsites();
+
+  let selectedDomain = options.domain ?? null;
+  if (!selectedDomain && options.crawlId) {
+    selectedDomain = await findDomainForCrawl(options.crawlId);
+  }
+  if (!selectedDomain && websites.length > 0) {
+    selectedDomain = websites[0].domain;
   }
 
-  const crawlDir = targetCrawlId ? join(OUTPUT_DIR, targetCrawlId) : OUTPUT_DIR;
-  const storiesFile = join(crawlDir, 'user-stories.json');
-  const siteMapFile = join(crawlDir, 'site-map.json');
+  if (!selectedDomain) {
+    return {
+      baseUrl: 'Unknown source',
+      storyCount: 0,
+      generatedAtLabel: 'No crawl artifacts detected',
+      summary: defaultSummary(),
+      stories: [],
+      sitemapNodes: [],
+      sitemapEdges: [],
+      activeCrawlId: null,
+      selectedDomain: null,
+      availableDomains: websites,
+      crawlHistory: [],
+    };
+  }
 
-  const stories = (await readJson<UserStory[]>(storiesFile, 'stories')) ?? [];
-  const siteMap =
-    (await readJson<{ baseUrl: string; pages: Array<{ url: string }>; edges: Array<{ source: string; targets: string[] }>; }>(
-      siteMapFile,
-      'site-map'
-    )) ??
-    { baseUrl: 'Unknown source', pages: [], edges: [] };
+  const crawlHistory = await listCrawlsForDomain(selectedDomain, 25);
+  const metadata = await loadWebsiteMetadata(selectedDomain);
+
+  const requestedCrawlId = options.crawlId ?? null;
+  const resolvedCrawlId = requestedCrawlId ?? metadata?.lastCrawlId ?? null;
+
+  const { siteMap, userStories, generatedLabel } = await loadCrawlArtifacts(selectedDomain, resolvedCrawlId ?? undefined);
+
+  const stories = (userStories as UserStory[] | null) ?? [];
+  const siteMapData =
+    (siteMap as { baseUrl: string; pages: Array<{ url: string }>; edges: Array<{ source: string; targets: string[] }>; } | null) ??
+    { baseUrl: metadata?.baseUrl ?? 'Unknown source', pages: [], edges: [] };
 
   console.info('[storyData] Story count', stories.length);
 
@@ -288,15 +274,19 @@ export const loadDashboardData = async (crawlId?: string): Promise<DashboardData
   }
 
   return {
-    baseUrl: siteMap.baseUrl,
+    baseUrl: siteMapData.baseUrl,
     storyCount: stories.length,
-    generatedAtLabel: await getGeneratedAtLabel(crawlDir, storiesFile),
+    generatedAtLabel: generatedLabel,
     summary,
     stories: sortedStories.map((story) => ({
       ...story,
-      ...buildSpecMetadata(story),
+      ...buildSpecMetadata(story, selectedDomain!, resolvedCrawlId),
     })),
     sitemapNodes,
     sitemapEdges,
+    activeCrawlId: resolvedCrawlId,
+    selectedDomain,
+    availableDomains: websites,
+    crawlHistory,
   };
 };

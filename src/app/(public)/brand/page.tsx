@@ -11,28 +11,45 @@ import { MetricsCard } from '@/components/ui/metrics-card';
 import { SectionTitle } from '@/components/ui/section-title';
 import { StoryCard } from '@/components/ui/story-card';
 import { SitemapVisualizer } from '@/components/ui/sitemap-visualizer';
+import { DomainSwitcher } from '@/components/ui/domain-switcher';
 
 export default async function BrandPage({
   searchParams,
 }: {
-  searchParams: Promise<{ crawlId?: string }>;
+  searchParams: Promise<{ domain?: string; crawlId?: string }>;
 }) {
   const resolvedParams = await searchParams;
-  const crawlId = resolvedParams.crawlId;
-  const data = await loadDashboardData(crawlId);
+  const data = await loadDashboardData({
+    domain: resolvedParams.domain,
+    crawlId: resolvedParams.crawlId,
+  });
+  const effectiveCrawlId = data.activeCrawlId ?? undefined;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-4 pb-16 pt-12 sm:px-6 lg:px-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Sparkier Regression Dashboard</h1>
           <p className="mt-2 text-sm text-slate-600">
             Generated from the latest automated crawl. Review baseline assertions, CTA coverage, and Playwright skeletons before pushing your next deployment.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <Timer className="h-4 w-4" aria-hidden />
-          <span>{data.generatedAtLabel}</span>
+        <div className="flex w-full flex-col gap-3 text-sm text-slate-500 sm:w-auto sm:items-end">
+          <DomainSwitcher
+            domains={data.availableDomains}
+            selectedDomain={data.selectedDomain}
+            crawlHistory={data.crawlHistory}
+            activeCrawlId={data.activeCrawlId}
+          />
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <div className="flex items-center gap-2">
+              <Timer className="h-4 w-4" aria-hidden />
+              <span>{data.generatedAtLabel}</span>
+            </div>
+            {effectiveCrawlId ? (
+              <span className="font-mono text-xs text-slate-500">Crawl ID: {effectiveCrawlId}</span>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -58,7 +75,7 @@ export default async function BrandPage({
       ) : (
         <div className="grid gap-6">
           {data.stories.map((story) => (
-            <StoryCard key={story.id} story={story} crawlId={crawlId} />
+            <StoryCard key={story.id} story={story} crawlId={effectiveCrawlId} domain={data.selectedDomain} />
           ))}
         </div>
       )}

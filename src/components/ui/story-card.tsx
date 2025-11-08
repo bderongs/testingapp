@@ -19,6 +19,7 @@ interface StoryWithSpec extends UserStory {
 interface StoryCardProps {
   story: StoryWithSpec;
   crawlId?: string;
+  domain?: string | null;
 }
 
 const cardAccent: Record<UserStory['kind'], string> = {
@@ -43,10 +44,29 @@ interface TestResponse {
   assertionResults?: AssertionResult[];
 }
 
-export const StoryCard = ({ story, crawlId }: StoryCardProps) => {
+export const StoryCard = ({ story, crawlId, domain }: StoryCardProps) => {
   const [isRunningTest, setIsRunningTest] = useState(false);
   const [testResult, setTestResult] = useState<TestResponse | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const headingFromAssertions = story.baselineAssertions
+    .map((assertion) => assertion.match(/Primary heading displays "(.+?)"/))
+    .find((match): match is RegExpMatchArray => Boolean(match));
+
+  const pageTitle = (() => {
+    if (headingFromAssertions) {
+      return headingFromAssertions[1];
+    }
+    const trimmedTitle = story.title?.trim();
+    if (trimmedTitle && trimmedTitle.length > 0) {
+      return trimmedTitle;
+    }
+    try {
+      const url = new URL(story.entryUrl);
+      return url.pathname === '/' ? url.hostname : `${url.hostname}${url.pathname}`;
+    } catch {
+      return story.entryUrl;
+    }
+  })();
 
   const handleRunTest = async () => {
     setIsRunningTest(true);
@@ -57,6 +77,9 @@ export const StoryCard = ({ story, crawlId }: StoryCardProps) => {
       const url = new URL(`/api/test/${story.specSlug}/assertions`, window.location.origin);
       if (crawlId) {
         url.searchParams.set('crawlId', crawlId);
+      }
+      if (domain) {
+        url.searchParams.set('domain', domain);
       }
       const response = await fetch(url.toString(), {
         method: 'POST',
@@ -79,16 +102,30 @@ export const StoryCard = ({ story, crawlId }: StoryCardProps) => {
         'shadow-sm'
       )}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="rounded-full bg-sparkier-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sparkier-primary">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-500">
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
+              <span className="block h-2 w-2 rounded-full bg-sparkier-primary" />
               {story.kind}
             </span>
             <StatusBadge status={story.verificationStatus} />
           </div>
-          <h3 className="mt-3 text-2xl font-semibold text-slate-900">{story.title}</h3>
-          <p className="mt-2 text-sm text-slate-600">{story.description}</p>
+          <div className="space-y-1">
+            <a
+              href={story.entryUrl}
+              className="group inline-flex items-center gap-2 text-sm font-medium text-sparkier-primary transition hover:text-sparkier-secondary"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ArrowUpRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden />
+              <span className="font-mono text-xs text-slate-500 group-hover:text-slate-600 break-all leading-relaxed">
+                {story.entryUrl}
+              </span>
+            </a>
+            <h3 className="text-2xl font-semibold text-slate-900">{pageTitle}</h3>
+          </div>
+          <p className="text-sm text-slate-600">{story.description}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -118,15 +155,6 @@ export const StoryCard = ({ story, crawlId }: StoryCardProps) => {
             <FileCode className="h-3.5 w-3.5" aria-hidden />
             View Spec Skeleton
           </Link>
-          <a
-            href={story.entryUrl}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-sparkier-primary hover:text-sparkier-primary"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
-            Source Page
-          </a>
         </div>
       </div>
 
