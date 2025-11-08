@@ -22,6 +22,98 @@ interface CrawlResponse {
   status?: 'pending' | 'running' | 'completed' | 'failed';
 }
 
+const normalizeBooleanToken = (token: string | undefined): boolean =>
+  token === '✓' || token?.toLowerCase() === 'true';
+
+const parseDevtoolsTableCookies = (
+  input: string,
+  defaultDomain: string | null
+): Cookie[] | null => {
+  const lines = input
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const cookies: Cookie[] = [];
+
+  for (const line of lines) {
+    const rawTokens = line.includes('\t') ? line.split('\t') : line.split(/\s{2,}/);
+    const tokens = rawTokens.map((token) => token.trim()).filter((token) => token.length > 0);
+
+    if (tokens.length < 3) {
+      continue;
+    }
+
+    const name = tokens[0];
+    const value = tokens[1] ?? '';
+    const sizeToken = tokens[5];
+
+    if (!name || name.toLowerCase() === 'name') {
+      continue;
+    }
+
+    // Netscape cookie format uses TRUE/FALSE as the second column; skip those here.
+    if (tokens[1] === 'TRUE' || tokens[1] === 'FALSE') {
+      continue;
+    }
+
+    if (!sizeToken || !/^\d+$/.test(sizeToken)) {
+      continue;
+    }
+
+    if (!value) {
+      continue;
+    }
+
+    const domain =
+      (tokens[2] && tokens[2] !== '' ? tokens[2] : defaultDomain) ?? '';
+    const path = tokens[3] && tokens[3].startsWith('/') ? tokens[3] : '/';
+    const expiresToken = tokens[4];
+    const httpOnlyToken = tokens[6];
+    const secureToken = tokens[7];
+    const sameSiteToken = tokens[8];
+
+    if (!domain) {
+      continue;
+    }
+
+    let expires: number | undefined;
+    if (expiresToken && expiresToken !== 'Session') {
+      const asNumber = Number(expiresToken);
+      if (!Number.isNaN(asNumber) && asNumber > 0) {
+        expires = Math.floor(asNumber);
+      } else {
+        const date = new Date(expiresToken);
+        if (!Number.isNaN(date.getTime())) {
+          expires = Math.floor(date.getTime() / 1000);
+        }
+      }
+    }
+
+    const sameSite =
+      sameSiteToken === 'Strict' || sameSiteToken === 'Lax' || sameSiteToken === 'None'
+        ? sameSiteToken
+        : undefined;
+
+    cookies.push({
+      name,
+      value,
+      domain,
+      path,
+      expires,
+      httpOnly: normalizeBooleanToken(httpOnlyToken),
+      secure: normalizeBooleanToken(secureToken),
+      sameSite,
+    });
+  }
+
+  return cookies.length > 0 ? cookies : null;
+};
+
 export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
   const [url, setUrl] = useState(defaultUrl);
   const [maxPages, setMaxPages] = useState(10);
@@ -169,6 +261,8 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
       }
     };
 
+    const defaultDomain = extractDomainFromUrl(url);
+
     // Try JSON first
     try {
       const parsed = JSON.parse(input);
@@ -217,11 +311,16 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
       // Not JSON
     }
 
+    const devtoolsCookies = parseDevtoolsTableCookies(input, defaultDomain);
+    if (devtoolsCookies && devtoolsCookies.length > 0) {
+      return devtoolsCookies;
+    }
+
     // Try Netscape format
     const lines = input.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
     if (lines.length > 0) {
-      const defaultDomain = extractDomainFromUrl(url);
-      if (defaultDomain) {
+      const fallbackDomain = defaultDomain ?? extractDomainFromUrl(url);
+      if (fallbackDomain) {
         for (const line of lines) {
           const parts = line.split('\t');
           if (parts.length >= 7) {
@@ -231,7 +330,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
               cookies.push({
                 name: name.trim(),
                 value: value.trim(),
-                domain: domain.trim() || defaultDomain,
+                domain: domain.trim() || fallbackDomain,
                 path: path.trim() || '/',
                 expires: expiration && expiration !== '0' && expiration !== '-1' 
                   ? Math.floor(Number(expiration)) 
@@ -250,7 +349,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                 cookies.push({
                   name: name.trim(),
                   value: value.trim(),
-                  domain: defaultDomain,
+                  domain: fallbackDomain,
                   path: '/',
                   secure: false,
                   httpOnly: false,
@@ -264,7 +363,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                 cookies.push({
                   name,
                   value,
-                  domain: defaultDomain,
+                  domain: fallbackDomain,
                   path: '/',
                   secure: false,
                   httpOnly: false,
@@ -326,6 +425,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
         return null;
       }
     };
+    const defaultDomain = extractDomainFromUrl(url);
 
     // Method 1: Try JSON array format (most common from browser extensions)
     try {
@@ -386,12 +486,18 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
       // Not JSON, try other formats
     }
 
+    const devtoolsCookies = parseDevtoolsTableCookies(input, defaultDomain);
+    if (devtoolsCookies && devtoolsCookies.length > 0) {
+      setCookiesError(null);
+      return devtoolsCookies;
+    }
+
     // Method 2: Try Netscape cookie format (tab-separated)
     // Format: domain	flag	path	secure	expiration	name	value
     const lines = input.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
     if (lines.length > 0) {
-      const defaultDomain = extractDomainFromUrl(url);
-      if (!defaultDomain) {
+      const fallbackDomain = defaultDomain ?? extractDomainFromUrl(url);
+      if (!fallbackDomain) {
         setCookiesError('Could not determine domain. Please ensure the Target URL is set or include domain in cookies.');
         return null;
       }
@@ -411,7 +517,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
             cookies.push({
               name: name.trim(),
               value: value.trim(),
-              domain: domain.trim() || defaultDomain,
+              domain: domain.trim() || fallbackDomain,
               path: path.trim() || '/',
               expires: expires && expires > 0 ? expires : undefined,
               secure: secure === 'TRUE' || secure === 'true',
@@ -430,7 +536,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
               cookies.push({
                 name: name.trim(),
                 value: value.trim(),
-                domain: defaultDomain,
+                domain: fallbackDomain,
                 path: '/',
                 secure: false,
                 httpOnly: false,
@@ -445,7 +551,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
               cookies.push({
                 name,
                 value,
-                domain: defaultDomain,
+                domain: fallbackDomain,
                 path: '/',
                 secure: false,
                 httpOnly: false,
