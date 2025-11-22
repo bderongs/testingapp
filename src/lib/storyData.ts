@@ -1,7 +1,7 @@
 // This file loads crawl output from the filesystem and prepares dashboard-ready data structures.
 import { join } from 'node:path';
 
-import type { StoryKind, UserStory } from '@/types';
+import type { StoryKind, UserStory, Cookie, PageSummary } from '@/types';
 import { sanitizeFileSlug } from '@/lib/sanitize';
 import {
   listWebsites,
@@ -12,11 +12,13 @@ import {
   type WebsiteSummary,
   type CrawlSummary,
 } from '@/lib/websites';
+import { loadDomainCookies } from '@/storage/cookieStore';
 
 interface StorySummary {
   byKind: Record<StoryKind, number>;
   unverified: number;
   pageCount: number;
+  complexWithForms: number;
 }
 
 interface StoryWithSpec extends UserStory {
@@ -47,6 +49,12 @@ interface DashboardData {
   selectedDomain: string | null;
   availableDomains: WebsiteSummary[];
   crawlHistory: CrawlSummary[];
+  cookieSnapshot: {
+    cookies: Cookie[];
+    updatedAtLabel: string;
+  };
+  pendingUrlCount: number;
+  availablePages: PageSummary[];
 }
 
 const defaultSummary = (): StorySummary => ({
@@ -58,6 +66,7 @@ const defaultSummary = (): StorySummary => ({
   },
   unverified: 0,
   pageCount: 0,
+  complexWithForms: 0,
 });
 
 const buildSpecMetadata = (
@@ -108,6 +117,12 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
       selectedDomain: null,
       availableDomains: websites,
       crawlHistory: [],
+      cookieSnapshot: {
+        cookies: [],
+        updatedAtLabel: 'No cookies saved',
+      },
+      pendingUrlCount: 0,
+      availablePages: [],
     };
   }
 
@@ -117,12 +132,21 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
   const requestedCrawlId = options.crawlId ?? null;
   const resolvedCrawlId = requestedCrawlId ?? metadata?.lastCrawlId ?? null;
 
-  const { siteMap, userStories, generatedLabel } = await loadCrawlArtifacts(selectedDomain, resolvedCrawlId ?? undefined);
+  const { siteMap, userStories, generatedLabel, resolvedCrawlId: actualCrawlId } = await loadCrawlArtifacts(
+    selectedDomain,
+    resolvedCrawlId ?? undefined
+  );
+
+  const effectiveCrawlId = actualCrawlId ?? resolvedCrawlId ?? null;
 
   const stories = (userStories as UserStory[] | null) ?? [];
   const siteMapData =
-    (siteMap as { baseUrl: string; pages: Array<{ url: string }>; edges: Array<{ source: string; targets: string[] }>; } | null) ??
-    { baseUrl: metadata?.baseUrl ?? 'Unknown source', pages: [], edges: [] };
+    (siteMap as {
+      baseUrl: string;
+      pages: Array<{ url: string; pageGoal?: string; primaryActions?: string[] }>;
+      edges: Array<{ source: string; targets: string[] }>;
+      pendingUrls?: string[];
+    } | null) ?? { baseUrl: metadata?.baseUrl ?? 'Unknown source', pages: [], edges: [], pendingUrls: [] };
 
   console.info('[storyData] Story count', stories.length);
 
@@ -131,6 +155,9 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
     acc.byKind[story.kind] += 1;
     if (story.verificationStatus !== 'baseline') {
       acc.unverified += 1;
+    }
+    if (story.kind === 'complex' && story.detectedFormFieldLabels && story.detectedFormFieldLabels.length > 0) {
+      acc.complexWithForms += 1;
     }
     return acc;
   }, defaultSummary());
@@ -147,15 +174,15 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
   // Group pages by URL prefix/category to reduce noise in the visualization
   const categoryGroups = new Map<string, number>();
   const allUrls = new Set<string>();
-  
+
   // Include all pages
   siteMapData.pages.forEach((page) => allUrls.add(page.url));
-  
+
   // Include all edge targets to capture the full site structure
   siteMapData.edges.forEach((edge) => {
     edge.targets.forEach((target) => allUrls.add(target));
   });
-  
+
   // Count URLs by category
   allUrls.forEach((url) => {
     const urlObj = new URL(url);
@@ -176,7 +203,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
       const urlObj = new URL(page.url);
       const pathSegments = urlObj.pathname.split('/').filter(Boolean);
       if (pathSegments.length === 0) return true; // Always include home
-      
+
       const category = pathSegments[0];
       const count = categoryGroups.get(category) || 0;
       // Only show individual pages if there are fewer than 3 in the category, or if it's top-level
@@ -190,7 +217,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
       const urlObj = new URL(page.url);
       const pathname = urlObj.pathname;
       const pathSegments = pathname.split('/').filter(Boolean);
-      
+
       let label: string;
       if (pathSegments.length === 0) {
         label = 'Home';
@@ -203,7 +230,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
         }
         label = pathSegments[pathSegments.length - 1];
       }
-      
+
       return {
         id: page.url,
         label: label.substring(0, 40),
@@ -221,7 +248,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
         const pathSegments = urlObj.pathname.split('/').filter(Boolean);
         return pathSegments[0] === category && pathSegments.length === 1;
       });
-      
+
       if (!hasCategoryNode) {
         // Find a representative URL from either crawled pages or edge targets
         const representativeUrl = Array.from(allUrls).find((url) => {
@@ -229,7 +256,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
           const pathSegments = urlObj.pathname.split('/').filter(Boolean);
           return pathSegments.length > 0 && pathSegments[0] === category;
         });
-        
+
         if (representativeUrl) {
           sitemapNodes.push({
             id: `/${category}/`,
@@ -246,7 +273,7 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
       edge.targets.map((target) => {
         const sourceCategory = getCategory(edge.source);
         const targetCategory = getCategory(target);
-        
+
         // For large categories, collapse edges to category nodes
         if (sourceCategory && targetCategory && sourceCategory !== edge.source && targetCategory !== target) {
           return { from: sourceCategory, to: targetCategory };
@@ -259,12 +286,12 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
       const edgeStr = `${edge.from}->${edge.to}`;
       return self.findIndex((e) => `${e.from}->${e.to}` === edgeStr) === index;
     });
-  
+
   function getCategory(url: string): string | null {
     const urlObj = new URL(url);
     const pathSegments = urlObj.pathname.split('/').filter(Boolean);
     if (pathSegments.length === 0) return null;
-    
+
     const category = pathSegments[0];
     const count = categoryGroups.get(category) || 0;
     if (count >= 3) {
@@ -273,6 +300,13 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
     return null;
   }
 
+  const savedCookies = await loadDomainCookies(selectedDomain);
+  const cookieUpdatedAtLabel =
+    savedCookies.cookies.length > 0 && savedCookies.updatedAt
+      ? `Updated ${new Date(savedCookies.updatedAt).toLocaleString()}`
+      : 'No cookies saved';
+  const pendingUrlCount = Array.isArray(siteMapData.pendingUrls) ? siteMapData.pendingUrls.length : 0;
+
   return {
     baseUrl: siteMapData.baseUrl,
     storyCount: stories.length,
@@ -280,13 +314,19 @@ export const loadDashboardData = async (options: LoadDashboardOptions = {}): Pro
     summary,
     stories: sortedStories.map((story) => ({
       ...story,
-      ...buildSpecMetadata(story, selectedDomain!, resolvedCrawlId),
+      ...buildSpecMetadata(story, selectedDomain!, effectiveCrawlId),
     })),
     sitemapNodes,
     sitemapEdges,
-    activeCrawlId: resolvedCrawlId,
+    activeCrawlId: effectiveCrawlId,
     selectedDomain,
     availableDomains: websites,
     crawlHistory,
+    cookieSnapshot: {
+      cookies: savedCookies.cookies,
+      updatedAtLabel: cookieUpdatedAtLabel,
+    },
+    pendingUrlCount,
+    availablePages: siteMapData.pages as PageSummary[],
   };
 };

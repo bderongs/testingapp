@@ -8,18 +8,37 @@ import { z } from 'zod';
 
 import { findDomainForCrawl } from '@/lib/websites';
 import { logger } from '@/utils/logger';
+import { sanitizeFileSlug } from '@/lib/sanitize';
+import type { UserStory } from '@/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic'; // Prevent static generation at build time
 
 // Check if we're in build mode (Next.js sets this during build)
-const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' || 
-                     process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.RAILWAY_ENVIRONMENT;
+const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' ||
+  process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.RAILWAY_ENVIRONMENT;
 
 const requestSchema = z.object({
   instruction: z.string().min(1, 'Instruction is required'),
   apply: z.boolean().optional().default(false),
   baselineAssertions: z.array(z.string()).optional(),
+  playwrightOutline: z.array(z.string()).optional(),
+  context: z
+    .object({
+      entryUrl: z.string().optional(),
+      primaryCtaLabel: z.string().optional(),
+      primaryActionLabel: z.string().optional(),
+      formFieldLabels: z.array(z.string()).optional(),
+      primaryActionOutcome: z
+        .object({
+          kind: z.string(),
+          targetUrl: z.string().optional(),
+          evidence: z.array(z.string()).optional(),
+          notes: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 // Dynamic import to avoid loading OpenAI module at build time
@@ -46,7 +65,7 @@ const findLatestCrawlId = async (): Promise<string | null> => {
     const { readdir, stat } = await import('node:fs/promises');
     const entries = await readdir(OUTPUT_DIR, { withFileTypes: true });
     const crawlDirs = entries.filter((entry) => entry.isDirectory() && entry.name !== 'playwright');
-    
+
     let latestCrawlId: string | null = null;
     let latestTime = 0;
 
@@ -76,14 +95,23 @@ const ensureDir = async (targetDir: string): Promise<void> => {
   }
 };
 
-const createBackup = async (specFile: string): Promise<string> => {
-  const backupDir = join(dirname(specFile), '.backups');
-  await ensureDir(backupDir);
-  const fileName = specFile.split('/').pop() || 'unknown.spec.ts';
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = join(backupDir, `${fileName}.${timestamp}.backup`);
-  await copyFile(specFile, backupPath);
-  return backupPath;
+const createBackup = async (specFile: string): Promise<string | null> => {
+  try {
+    // Check if the spec file exists
+    const { access } = await import('node:fs/promises');
+    await access(specFile);
+
+    const backupDir = join(dirname(specFile), '.backups');
+    await ensureDir(backupDir);
+    const fileName = specFile.split('/').pop() || 'unknown.spec.ts';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = join(backupDir, `${fileName}.${timestamp}.backup`);
+    await copyFile(specFile, backupPath);
+    return backupPath;
+  } catch {
+    // File doesn't exist, no backup needed
+    return null;
+  }
 };
 
 const readJson = async <T>(filePath: string, label: string): Promise<T | null> => {
@@ -182,11 +210,10 @@ export async function POST(
   const specDir = paths.specDir;
   const specFile = join(specDir, `${slug}.spec.ts`);
   const storiesFilePath = paths.storiesFile;
-const baseDir = paths.baseDir;
+  const baseDir = paths.baseDir;
 
   logger.info(
-    `[test-edit] Received request slug=${slug} domain=${domain ?? 'legacy'} crawlId=${
-      crawlId ?? 'latest'
+    `[test-edit] Received request slug=${slug} domain=${domain ?? 'legacy'} crawlId=${crawlId ?? 'latest'
     } specDir=${specDir}`
   );
 
@@ -206,7 +233,13 @@ const baseDir = paths.baseDir;
       );
     }
 
-    const { instruction, apply, baselineAssertions: providedAssertions } = parse.data;
+    const {
+      instruction,
+      apply,
+      baselineAssertions: providedAssertions,
+      playwrightOutline: providedOutline,
+      context: providedContext,
+    } = parse.data;
 
     // Get OpenAI client (will throw if API key is missing)
     // Use dynamic import to avoid build-time errors
@@ -224,13 +257,30 @@ const baseDir = paths.baseDir;
     }
 
     // Load user stories to get current assertions
-    const stories = (await readJson<Array<{ suggestedScriptName: string; baselineAssertions: string[] }>>(
+    const stories = (await readJson<UserStory[]>(
       storiesFilePath,
       'stories'
     )) ?? [];
-    
-    const story = stories.find((s) => {
-      const storySlug = s.suggestedScriptName.replace(/[^a-z0-9-]/g, '');
+
+    // Also load custom stories
+    const customStoriesPath = join(baseDir, 'custom-stories.json');
+    const customStoriesData = await readJson<{ stories: UserStory[] }>(
+      customStoriesPath,
+      'custom stories'
+    );
+    const customStories = customStoriesData?.stories ?? [];
+
+    // Merge both story sources
+    const allStories = [...stories, ...customStories];
+
+    const story = allStories.find((s) => {
+      const storySlug = sanitizeFileSlug(s.suggestedScriptName, s.id ?? s.suggestedScriptName);
+      return storySlug === slug;
+    });
+
+    // Track if this is a custom story
+    const isCustomStory = customStories.some((s) => {
+      const storySlug = sanitizeFileSlug(s.suggestedScriptName, s.id ?? s.suggestedScriptName);
       return storySlug === slug;
     });
 
@@ -247,13 +297,46 @@ const baseDir = paths.baseDir;
     const currentAssertions = providedAssertions || story.baselineAssertions;
 
     // Create backup if applying changes
-    let backupPath: string | undefined;
+    let backupPath: string | null = null;
     if (apply) {
       backupPath = await createBackup(specFile);
-      logger.info(`[test-edit] Backup created at ${backupPath}`);
+      if (backupPath) {
+        logger.info(`[test-edit] Backup created at ${backupPath}`);
+      }
     }
 
     // Call OpenAI to modify the assertions
+    const outline = providedOutline && providedOutline.length > 0 ? providedOutline : story.playwrightOutline;
+    const formFieldLabels = providedContext?.formFieldLabels ?? story.detectedFormFieldLabels ?? [];
+    const entryUrlHint = providedContext?.entryUrl ?? story.entryUrl;
+    const primaryCtaHint = providedContext?.primaryCtaLabel ?? story.primaryCtaLabel ?? undefined;
+    const primaryActionHint = providedContext?.primaryActionLabel ?? story.primaryActionLabel ?? undefined;
+    const primaryOutcomeHint = providedContext?.primaryActionOutcome ?? story.primaryActionOutcome ?? undefined;
+
+    const outlineSection =
+      outline.length > 0
+        ? `Existing outline steps:\n${outline.map((line) => `- ${line}`).join('\n')}\n`
+        : '';
+
+    const formHint =
+      formFieldLabels.length > 0
+        ? `Detected form field labels (prefer targeting these inputs directly): ${formFieldLabels.join(', ')}.`
+        : 'No <form> elements were detected during the crawl; avoid assuming role="form" elements exist unless you add them manually.';
+
+    const contextLines = [
+      `Entry URL: ${entryUrlHint}`,
+      primaryCtaHint ? `Primary CTA label: ${primaryCtaHint}` : null,
+      primaryActionHint ? `Primary action label: ${primaryActionHint}` : null,
+      primaryOutcomeHint
+        ? primaryOutcomeHint.kind === 'navigation'
+          ? `Observed outcome: navigation${primaryOutcomeHint.targetUrl ? ` to ${primaryOutcomeHint.targetUrl}` : ''}.`
+          : `Observed outcome: ${primaryOutcomeHint.kind}.`
+        : null,
+      formHint,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
     const systemPrompt = `You are a test quality expert. Your task is to modify baseline assertions (user-friendly test requirements) based on user instructions.
 
 Rules:
@@ -269,7 +352,12 @@ The user will provide:
 
 Return the modified assertions as a JSON array.`;
 
-    const userPrompt = `Current baseline assertions:
+    const userPrompt = `Context:
+${contextLines}
+
+${outlineSection}
+
+Current baseline assertions:
 
 ${JSON.stringify(currentAssertions, null, 2)}
 
@@ -311,28 +399,81 @@ Provide the modified baseline assertions as a JSON array:`;
 
     // Apply changes if requested
     if (apply) {
-      // Update the story in user-stories.json
-      const updatedStories = stories.map((s) => {
-        const storySlug = s.suggestedScriptName.replace(/[^a-z0-9-]/g, '');
-        if (storySlug === slug) {
-          return { ...s, baselineAssertions: modifiedAssertions };
-        }
-        return s;
-      });
+      // Update the story in the appropriate file
+      let updatedStories: UserStory[];
 
-      await ensureDir(dirname(storiesFilePath));
-      await writeFile(storiesFilePath, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
-      logger.info(`[test-edit] Updated user stories at ${storiesFilePath}`);
+      if (isCustomStory) {
+        // Update custom-stories.json
+        const updatedCustomStories = customStories.map((s) => {
+          const storySlug = sanitizeFileSlug(s.suggestedScriptName, s.id ?? s.suggestedScriptName);
+          if (storySlug === slug) {
+            return { ...s, baselineAssertions: modifiedAssertions };
+          }
+          return s;
+        });
+
+        await ensureDir(dirname(customStoriesPath));
+        await writeFile(
+          customStoriesPath,
+          JSON.stringify({ stories: updatedCustomStories }, null, 2) + '\n',
+          'utf8'
+        );
+        logger.info(`[test-edit] Updated custom stories at ${customStoriesPath}`);
+        updatedStories = updatedCustomStories;
+      } else {
+        // Update user-stories.json
+        updatedStories = stories.map((s) => {
+          const storySlug = sanitizeFileSlug(s.suggestedScriptName, s.id ?? s.suggestedScriptName);
+          if (storySlug === slug) {
+            return { ...s, baselineAssertions: modifiedAssertions };
+          }
+          return s;
+        });
+
+        await ensureDir(dirname(storiesFilePath));
+        await writeFile(storiesFilePath, JSON.stringify(updatedStories, null, 2) + '\n', 'utf8');
+        logger.info(`[test-edit] Updated user stories at ${storiesFilePath}`);
+      }
 
       // Regenerate Playwright code from updated assertions
       // Note: This is a simplified version - in production, you'd want to call the full storyBuilder
       // For now, we'll read the current code and update it based on assertions
-      const currentCode = await readFile(specFile, 'utf8');
-      
+      let currentCode = '';
+      try {
+        currentCode = await readFile(specFile, 'utf8');
+      } catch {
+        // File doesn't exist yet, will generate from scratch
+        currentCode = `import { test, expect } from '@playwright/test';
+
+test.describe('${story.title}', () => {
+  test('should validate baseline assertions', async ({ page }) => {
+    await page.goto('${story.entryUrl}');
+    // Assertions will be generated by AI
+  });
+});`;
+      }
+
       // Use AI to regenerate the Playwright code from the assertions
+      const codeContextLines = [
+        `Entry URL: ${entryUrlHint}`,
+        primaryCtaHint ? `Primary CTA label: ${primaryCtaHint}` : null,
+        primaryActionHint ? `Primary action label: ${primaryActionHint}` : null,
+        primaryOutcomeHint
+          ? primaryOutcomeHint.kind === 'navigation'
+            ? `Observed navigation outcome${primaryOutcomeHint.targetUrl ? ` to ${primaryOutcomeHint.targetUrl}` : ''}.`
+            : `Observed outcome after action: ${primaryOutcomeHint.kind}.`
+          : null,
+        formHint,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
       const codePrompt = `You are a Playwright expert. Generate a complete Playwright test from these baseline assertions:
 
 ${JSON.stringify(modifiedAssertions, null, 2)}
+
+Context:
+${codeContextLines}
 
 Current test code structure:
 \`\`\`typescript
@@ -384,8 +525,7 @@ Return ONLY the complete code, wrapped in a markdown code block.`;
     }
 
     logger.info(
-      `[test-edit] ${apply ? 'Applied' : 'Previewed'} changes for slug=${slug} domain=${
-        domain ?? 'legacy'
+      `[test-edit] ${apply ? 'Applied' : 'Previewed'} changes for slug=${slug} domain=${domain ?? 'legacy'
       } crawlId=${crawlId ?? 'latest'}`
     );
 
@@ -398,8 +538,7 @@ Return ONLY the complete code, wrapped in a markdown code block.`;
     });
   } catch (error) {
     logger.error(
-      `[test-edit] Failed to modify slug=${slug} domain=${domain ?? 'legacy'} crawlId=${
-        crawlId ?? 'latest'
+      `[test-edit] Failed to modify slug=${slug} domain=${domain ?? 'legacy'} crawlId=${crawlId ?? 'latest'
       }: ${(error as Error).message}`
     );
     return NextResponse.json(

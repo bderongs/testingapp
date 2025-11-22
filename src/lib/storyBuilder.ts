@@ -2,13 +2,13 @@
 
 import { createHash } from 'node:crypto';
 
-import type { CrawlResult, PageSummary, StoryKind, UserStory } from '../types';
+import type { ActionHint, ActionHintCategory, CrawlResult, PageSummary, StoryKind, UserStory } from '../types';
 import { normalizeUrl, safeResolve } from '../utils/url';
 
 const STORY_LIMIT_PER_KIND = 3;
 
 const AUTH_KEYWORDS = ['login', 'log in', 'sign in', 'connexion'];
-const CTA_KEYWORDS = ['pricing', 'price', 'contact', 'demo', 'start', 'signup', 'sign up', 'book', 'trial', 'quote'];
+const CTA_KEYWORDS = ['pricing', 'price', 'contact', 'demo', 'start', 'signup', 'sign up', 'book', 'trial', 'quote', 'dashboard', 'tableau de bord'];
 const CTA_PREFERRED_KEYWORDS: Array<{ readonly terms: readonly string[]; readonly score: number }> = [
   { terms: ['reserver', 'reserve', 'book'], score: 30 },
   { terms: ['commencer', 'start', 'get started'], score: 24 },
@@ -18,6 +18,7 @@ const CTA_PREFERRED_KEYWORDS: Array<{ readonly terms: readonly string[]; readonl
   { terms: ['s\'inscrire', 'inscrire', 'sign up', 'signup', 'register'], score: 18 },
   { terms: ['continuer', 'continue'], score: 12 },
   { terms: ['connexion', 'login', 'sign in'], score: 8 },
+  { terms: ['tableau de bord', 'dashboard'], score: 25 },
 ];
 
 const CTA_PENALTY_KEYWORDS = ['connexion', 'login', 'sign in', 'sign-in'];
@@ -27,6 +28,20 @@ const PERSONA_KEYWORDS: Record<string, readonly string[]> = {
   marketing: ['marketing', 'growth', 'campaign'],
   operations: ['operations', 'workflow', 'automation'],
   leadership: ['executive', 'founder', 'leadership', 'strategy'],
+};
+
+const ACTION_CATEGORY_PRIORITY: Record<ActionHintCategory, number> = {
+  create: 60,
+  delete: 58,
+  update: 45,
+  invite: 52,
+  share: 40,
+  settle: 55,
+  search: 30,
+  filter: 28,
+  navigate: 24,
+  view: 20,
+  other: 10,
 };
 
 const SCHEMA_KIND_MAP: Record<string, StoryKind> = {
@@ -69,6 +84,7 @@ interface StoryCandidate {
   readonly personaTag?: string;
   readonly goalSummary?: string;
   readonly primaryCta?: PrimaryCtaSelection;
+  readonly primaryAction?: ActionHint;
 }
 
 interface OutlineContext {
@@ -76,6 +92,7 @@ interface OutlineContext {
   readonly kind: StoryKind;
   readonly navRefs: readonly NavReference[];
   readonly primaryCta?: PrimaryCtaSelection;
+  readonly primaryAction?: ActionHint;
   readonly personaTag?: string;
   readonly goalSummary?: string;
   readonly supportingPages: readonly string[];
@@ -94,7 +111,7 @@ const buildNavigationIndex = (crawl: CrawlResult): Map<string, NavReference[]> =
   for (const page of crawl.pages.values()) {
     const normalizedPageUrl = normalizeUrl(page.url);
     const navRefs: NavReference[] = [];
-    
+
     page.navigationSections.forEach((section) => {
       section.items.forEach((item) => {
         const entry: NavReference = {
@@ -106,7 +123,7 @@ const buildNavigationIndex = (crawl: CrawlResult): Map<string, NavReference[]> =
         navRefs.push(entry);
       });
     });
-    
+
     if (navRefs.length > 0) {
       index.set(normalizedPageUrl, navRefs);
     }
@@ -219,7 +236,8 @@ const computeScore = (
   kind: StoryKind,
   navRefs: readonly NavReference[],
   personaTag?: string,
-  primaryCta?: PrimaryCtaSelection
+  primaryCta?: PrimaryCtaSelection,
+  primaryAction?: ActionHint
 ): number => {
   let score = 0;
 
@@ -263,6 +281,16 @@ const computeScore = (
     score += 10;
   }
 
+  if (primaryAction) {
+    score += primaryAction.confidence / 2;
+    score += ACTION_CATEGORY_PRIORITY[primaryAction.category] ?? 0;
+    if (primaryAction.location === 'main') {
+      score += 6;
+    } else if (primaryAction.location === 'modal') {
+      score += 4;
+    }
+  }
+
   score += Math.min(page.interactiveElementCount, 10);
 
   return score;
@@ -274,7 +302,8 @@ const buildDescription = (
   navRefs: readonly NavReference[],
   personaTag: string | undefined,
   goal: string | undefined,
-  primaryCtaLabel: string | undefined
+  primaryCtaLabel: string | undefined,
+  primaryAction?: ActionHint
 ): string => {
   const navHint = navRefs[0]
     ? ` via ${navRefs[0].path}`
@@ -282,6 +311,12 @@ const buildDescription = (
   const personaHint = personaTag ? ` for ${personaTag} personas` : '';
   const goalHint = goal ? ` to ${goal}` : '';
   const ctaHint = primaryCtaLabel ? ` using the "${primaryCtaLabel}" CTA` : '';
+  const actionHint =
+    primaryAction && primaryAction.category !== 'other'
+      ? ` covering the ${primaryAction.category} action labeled "${primaryAction.label}"`
+      : primaryAction
+        ? ` covering the action labeled "${primaryAction.label}"`
+        : '';
 
   const pageLabel = page.title || page.url;
 
@@ -289,12 +324,12 @@ const buildDescription = (
     case 'authentication':
       return `Validate authentication on ${pageLabel}${navHint}${personaHint}, ensuring login works with provided test credentials${goalHint}.`;
     case 'complex':
-      return `Complete the key form on ${pageLabel}${navHint}${personaHint}, filling mandatory fields and submitting${goalHint}${ctaHint}.`;
+      return `Complete the key form on ${pageLabel}${navHint}${personaHint}, filling mandatory fields and submitting${goalHint}${ctaHint}${actionHint}.`;
     case 'interaction':
-      return `Exercise the primary CTA on ${pageLabel}${navHint}${personaHint}${goalHint}${ctaHint}, confirming interactive elements behave as expected.`;
+      return `Exercise the primary CTA on ${pageLabel}${navHint}${personaHint}${goalHint}${ctaHint}${actionHint}, confirming interactive elements behave as expected.`;
     case 'browsing':
     default:
-      return `Navigate through ${pageLabel}${navHint}${personaHint}${goalHint}, verifying the content loads and links resolve.`;
+      return `Navigate through ${pageLabel}${navHint}${personaHint}${goalHint}, verifying the content loads and links resolve${actionHint}.`;
   }
 };
 
@@ -310,6 +345,7 @@ const buildPlaywrightOutline = ({
   kind,
   navRefs,
   primaryCta,
+  primaryAction,
   personaTag,
   goalSummary,
   supportingPages,
@@ -343,6 +379,17 @@ const buildPlaywrightOutline = ({
     steps.push(`// Goal: ${toSentenceCase(goalSummary)}.`);
   }
 
+  if (primaryAction) {
+    const actionSummary =
+      primaryAction.category !== 'other'
+        ? `${primaryAction.category} action "${primaryAction.label}"`
+        : `action "${primaryAction.label}"`;
+    steps.push(`// Target action: ${actionSummary}.`);
+    if (primaryAction.supportingText.length > 0) {
+      steps.push(`// Context clues: ${primaryAction.supportingText.join(' | ')}.`);
+    }
+  }
+
   if (page.forms.length > 0) {
     const primaryForm = page.forms[0];
     const fieldHints = primaryForm.fields
@@ -360,34 +407,20 @@ const buildPlaywrightOutline = ({
 
   if (primaryCta) {
     const ctaRegex = escapeForRegex(primaryCta.label);
-    
+
     // Build a more precise selector based on CTA metadata
     let ctaSelector: string;
-    
-    if (primaryCta.isInMainContent) {
-      // Scope to main content area for better precision
-      const baseSelector = primaryCta.elementType === 'button' 
-        ? `page.locator('main, [role="main"]').getByRole('button', { name: /${ctaRegex}/i })`
-        : `page.locator('main, [role="main"]').getByRole('link', { name: /${ctaRegex}/i })`;
-      
-      // Try the preferred type first, fallback to the other type
-      if (primaryCta.elementType === 'button') {
-        ctaSelector = `${baseSelector}.or(page.locator('main, [role="main"]').getByRole('link', { name: /${ctaRegex}/i }))`;
-      } else {
-        ctaSelector = `page.locator('main, [role="main"]').getByRole('button', { name: /${ctaRegex}/i }).or(${baseSelector})`;
-      }
+
+    // Use semantic selectors for robustness
+    if (primaryCta.elementType === 'button') {
+      ctaSelector = `page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }))`;
+    } else if (primaryCta.elementType === 'link') {
+      ctaSelector = `page.getByRole('link', { name: /${ctaRegex}/i }).or(page.getByRole('button', { name: /${ctaRegex}/i }))`;
     } else {
-      // Not in main content, use standard selector but prefer the detected type
-      if (primaryCta.elementType === 'button') {
-        ctaSelector = `page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }))`;
-      } else if (primaryCta.elementType === 'link') {
-        ctaSelector = `page.getByRole('link', { name: /${ctaRegex}/i }).or(page.getByRole('button', { name: /${ctaRegex}/i }))`;
-      } else {
-        // Unknown type, try button first
-        ctaSelector = `page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }))`;
-      }
+      // Unknown type, try button first
+      ctaSelector = `page.getByRole('button', { name: /${ctaRegex}/i }).or(page.getByRole('link', { name: /${ctaRegex}/i }))`;
     }
-    
+
     // Always add .first() to handle multiple matches
     steps.push(`const cta = ${ctaSelector}.first();`);
     steps.push('await expect(cta).toBeVisible();');
@@ -398,17 +431,40 @@ const buildPlaywrightOutline = ({
     steps.push('// TODO: Fill in the required form fields and submit the form.');
   }
 
-  if (supportingPages.length > 0) {
-    const targetUrl = supportingPages[0];
-    const urlRegex = escapeForRegex(targetUrl);
+  const navigationTarget =
+    primaryAction?.outcome?.kind === 'navigation'
+      ? primaryAction.outcome.targetUrl ?? supportingPages[0]
+      : undefined;
+
+  if (navigationTarget) {
+    const urlRegex = escapeForRegex(navigationTarget);
     steps.push('// Verify navigation after performing the primary action.');
-    steps.push(`await expect(page).toHaveURL(/${urlRegex}/); // adjust expected destination if necessary`);
+    steps.push(`await expect(page).toHaveURL(/${urlRegex}/i);`);
+  } else if (primaryAction?.outcome && primaryAction.outcome.kind !== 'unknown') {
+    const outcomeLabel =
+      primaryAction.outcome.kind === 'inline-form'
+        ? 'Inline form should appear after the action.'
+        : primaryAction.outcome.kind === 'modal'
+          ? 'Modal should appear after the action.'
+          : primaryAction.outcome.kind === 'inline-content'
+            ? 'Additional inline content should appear after the action.'
+            : primaryAction.outcome.kind === 'no-change'
+              ? 'Action should keep the user on the same page without navigation.'
+              : `Observed outcome: ${primaryAction.outcome.kind}.`;
+    steps.push(`// ${outcomeLabel}`);
+  } else if (supportingPages.length > 0) {
+    steps.push(`// TODO: Verify navigation to ${supportingPages[0]} if the flow redirects.`);
   }
 
   return Array.from(new Set(steps));
 };
 
-const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, primaryCta?: PrimaryCtaSelection): string => {
+const buildExpectedOutcome = (
+  kind: StoryKind,
+  goalSummary: string | undefined,
+  primaryCta?: PrimaryCtaSelection,
+  primaryAction?: ActionHint
+): string => {
   if (goalSummary) {
     return toSentenceCase(goalSummary);
   }
@@ -420,7 +476,13 @@ const buildExpectedOutcome = (kind: StoryKind, goalSummary: string | undefined, 
       return 'Form submission succeeds with test data and displays the expected confirmation state.';
     case 'interaction': {
       const cta = primaryCta?.label ? ` by activating "${primaryCta.label}"` : '';
-      return `Primary interaction completes without errors${cta}.`;
+      const action =
+        primaryAction && primaryAction.category !== 'other'
+          ? ` while completing the ${primaryAction.category} action`
+          : primaryAction
+            ? ' while completing the highlighted action'
+            : '';
+      return `Primary interaction completes without errors${cta}${action}.`;
     }
     case 'browsing':
     default:
@@ -432,7 +494,8 @@ const buildBaselineAssertions = ({
   page,
   navRefs,
   primaryCta,
-}: Pick<OutlineContext, 'page' | 'navRefs' | 'primaryCta'>): string[] => {
+  primaryAction,
+}: Pick<OutlineContext, 'page' | 'navRefs' | 'primaryCta' | 'primaryAction'>): string[] => {
   const assertions: string[] = [];
 
   if (page.title) {
@@ -451,7 +514,24 @@ const buildBaselineAssertions = ({
     assertions.push(`Navigation link "${navRefs[0].itemLabel}" remains visible.`);
   }
 
-  if (page.forms.length > 0) {
+  if (primaryAction) {
+    if (primaryAction.category !== 'other') {
+      assertions.push(`Action "${primaryAction.label}" exposes the ${primaryAction.category} flow without errors.`);
+    } else {
+      assertions.push(`Action "${primaryAction.label}" is accessible and responsive.`);
+    }
+    if (primaryAction.outcome?.kind === 'navigation' && primaryAction.outcome.targetUrl) {
+      assertions.push(`Flow navigates to "${primaryAction.outcome.targetUrl}".`);
+    } else if (primaryAction.outcome?.kind === 'inline-form') {
+      assertions.push('Inline form becomes visible and accepts input after the action.');
+    } else if (primaryAction.outcome?.kind === 'modal') {
+      assertions.push('Modal dialog becomes visible after the action.');
+    } else if (primaryAction.outcome?.kind === 'no-change') {
+      assertions.push('Action keeps the experience on the same page without redirection.');
+    }
+  }
+
+  if (page.forms.some((form) => form.fields.length > 0)) {
     assertions.push('Key form fields accept input and validation messages remain clear.');
   }
 
@@ -462,7 +542,8 @@ const buildRepeatabilityNotes = ({
   kind,
   page,
   primaryCta,
-}: Pick<OutlineContext, 'kind' | 'page' | 'primaryCta'>): string[] => {
+  primaryAction,
+}: Pick<OutlineContext, 'kind' | 'page' | 'primaryCta' | 'primaryAction'>): string[] => {
   const notes: string[] = [];
 
   if (kind === 'authentication') {
@@ -477,6 +558,15 @@ const buildRepeatabilityNotes = ({
     const ctaFolded = primaryCta.label.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
     if (/reserver|reserve|book|purchase|checkout/.test(ctaFolded)) {
       notes.push('Mock downstream booking/purchase side-effects or run against a sandbox environment.');
+    }
+  }
+
+  if (primaryAction) {
+    if (primaryAction.category === 'delete' || primaryAction.category === 'settle') {
+      notes.push('Reset test data before each run to avoid destructive side-effects.');
+    }
+    if (primaryAction.category === 'create' || primaryAction.category === 'invite') {
+      notes.push('Provide disposable fixtures for create/invite flows and clean them up after validation.');
     }
   }
 
@@ -649,6 +739,51 @@ const selectPrimaryCta = (ctas: readonly { readonly label: string; readonly elem
   };
 };
 
+const selectPrimaryAction = (actionHints: readonly ActionHint[]): ActionHint | undefined => {
+  if (!actionHints || actionHints.length === 0) {
+    return undefined;
+  }
+
+  const seenLabels = new Set<string>();
+  const ranked = actionHints
+    .filter((hint) => {
+      const normalizedLabel = hint.label.trim().toLowerCase();
+      if (seenLabels.has(normalizedLabel)) {
+        return false;
+      }
+      seenLabels.add(normalizedLabel);
+      return true;
+    })
+    .map((hint) => {
+      const categoryWeight = ACTION_CATEGORY_PRIORITY[hint.category] ?? 0;
+      const locationWeight =
+        hint.location === 'main' ? 8 : hint.location === 'modal' ? 5 : hint.location === 'navigation' ? 3 : 0;
+      const score = hint.confidence + categoryWeight + locationWeight;
+      return { hint, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const top = ranked[0];
+  if (!top) {
+    return undefined;
+  }
+
+  return top.hint;
+};
+
+const extractFormFieldLabels = (page: PageSummary): string[] => {
+  if (!page.forms.length) {
+    return [];
+  }
+
+  const primaryForm = page.forms[0];
+  const labels = primaryForm.fields
+    .map((field) => field.label?.trim() || field.placeholder?.trim() || field.name || field.type)
+    .filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(labels)).slice(0, 6);
+};
+
 const buildId = (page: PageSummary, kind: StoryKind): string => {
   const hash = createHash('sha1').update(`${page.url}-${kind}`).digest('hex').slice(0, 8);
   return `${kind}-${hash}`;
@@ -666,7 +801,8 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
     const persona = detectPersona(page);
     const goal = detectGoal(page, navRefs);
     const primaryCta = selectPrimaryCta(page.primaryCtas);
-    const score = computeScore(page, kind, navRefs, persona, primaryCta);
+    const primaryAction = selectPrimaryAction(page.actionHints);
+    const score = computeScore(page, kind, navRefs, persona, primaryCta, primaryAction);
 
     candidates.push({
       page,
@@ -676,6 +812,7 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       personaTag: persona,
       goalSummary: goal,
       primaryCta,
+      primaryAction,
     });
   }
 
@@ -691,7 +828,7 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
   const selectedUrls = new Set<string>();
 
   for (const candidate of candidates) {
-    const { page, kind, navRefs, personaTag, goalSummary, primaryCta } = candidate;
+    const { page, kind, navRefs, personaTag, goalSummary, primaryCta, primaryAction } = candidate;
     const normalizedUrl = normalizeUrl(page.url);
 
     if (selectedUrls.has(`${normalizedUrl}-${kind}`)) {
@@ -708,23 +845,29 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
       kind,
       navRefs,
       primaryCta,
+      primaryAction,
       personaTag,
       goalSummary,
       supportingPages: supporting,
     });
-    const expectedOutcome = buildExpectedOutcome(kind, goalSummary, primaryCta);
-    const baselineAssertions = buildBaselineAssertions({ page, navRefs, primaryCta });
-    const repeatabilityNotes = buildRepeatabilityNotes({ kind, page, primaryCta });
+    const expectedOutcome = buildExpectedOutcome(kind, goalSummary, primaryCta, primaryAction);
+    const baselineAssertions = buildBaselineAssertions({ page, navRefs, primaryCta, primaryAction });
+    const repeatabilityNotes = buildRepeatabilityNotes({ kind, page, primaryCta, primaryAction });
 
     const story: UserStory = {
       id: buildId(page, kind),
       kind,
       title: page.title || page.url,
       entryUrl: page.url,
-      description: buildDescription(page, kind, navRefs, personaTag, goalSummary, primaryCta?.label),
+      description: buildDescription(page, kind, navRefs, personaTag, goalSummary, primaryCta?.label, primaryAction),
       suggestedScriptName: deriveScriptName(page, kind, navRefs, primaryCta),
       supportingPages: supporting.slice(0, 5),
       primaryCtaLabel: primaryCta?.label,
+      primaryActionLabel: primaryAction?.label,
+      primaryActionCategory: primaryAction?.category,
+      primaryActionOutcome: primaryAction?.outcome,
+      actionSupportingEvidence: primaryAction?.supportingText ?? [],
+      detectedFormFieldLabels: extractFormFieldLabels(page),
       playwrightOutline: outline,
       expectedOutcome,
       baselineAssertions,
@@ -738,3 +881,144 @@ export const identifyUserStories = (crawl: CrawlResult): UserStory[] => {
 
   return Object.values(grouped).flat();
 };
+
+/**
+ * Generate a user story from natural language intent using AI.
+ * This is used for manual story creation where users describe what they want to test.
+ */
+export const generateStoryFromIntent = async (
+  intent: string,
+  page: PageSummary,
+  crawlId: string,
+  customTitle?: string
+): Promise<UserStory> => {
+  const openai = await import('openai');
+
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OpenAI API key not configured');
+  }
+
+  const client = new openai.default({ apiKey: process.env.OPENAI_API_KEY });
+
+  // Prepare context from page
+  const ctaSummary = page.primaryCtas
+    .slice(0, 5)
+    .map((cta, i) => `${i + 1}. "${cta.label}" (${cta.elementType})`)
+    .join('\n');
+
+  const actionSummary = page.actionHints
+    .slice(0, 5)
+    .map((hint, i) => `${i + 1}. "${hint.label}" (${hint.category}, confidence: ${hint.confidence})`)
+    .join('\n');
+
+  const formSummary = page.forms
+    .slice(0, 2)
+    .map((form, i) => {
+      const fields = form.fields.map(f => `${f.label || f.name} (${f.type}${f.required ? ', required' : ''})`).join(', ');
+      return `${i + 1}. Form with fields: ${fields}`;
+    })
+    .join('\n');
+
+  const headingSummary = page.headingOutline
+    .slice(0, 5)
+    .map(h => `H${h.level}: ${h.text}`)
+    .join('\n');
+
+  const prompt = `You are an expert at generating Playwright test scenarios from user intent.
+
+User wants to test: "${intent}"
+
+Page context:
+- URL: ${page.url}
+- Title: ${page.title}
+- Meta description: ${page.metaDescription || 'N/A'}
+
+Detected CTAs:
+${ctaSummary || 'None'}
+
+Action hints:
+${actionSummary || 'None'}
+
+Forms:
+${formSummary || 'None'}
+
+Headings:
+${headingSummary || 'None'}
+
+Generate a user story in JSON format with these fields:
+{
+  "kind": "browsing|interaction|authentication|complex",
+  "title": "concise test name (max 60 chars)",
+  "description": "what this test validates (1-2 sentences)",
+  "suggestedScriptName": "kebab-case-filename",
+  "playwrightOutline": ["array of Playwright code steps as strings"],
+  "expectedOutcome": "what should happen when test passes",
+  "baselineAssertions": ["array of verification points"],
+  "repeatabilityNotes": ["array of setup requirements"]
+}
+
+Rules:
+1. Match the user's intent to detected CTAs/actions on the page
+2. Use semantic selectors: page.getByRole(), page.getByLabel(), page.getByText()
+3. Include await expect().toBeVisible() before interactions
+4. For forms, only fill required fields
+5. Verify navigation or state changes after actions
+6. Keep steps simple and focused on the user's intent
+
+Return ONLY valid JSON, no markdown formatting.`;
+
+  try {
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.3,
+      messages: [
+        { role: 'system', content: 'You generate Playwright test scenarios in JSON format.' },
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    const raw = completion.choices[0]?.message?.content?.trim();
+    if (!raw) {
+      throw new Error('No response from AI');
+    }
+
+    // Strip markdown code blocks if present
+    let jsonStr = raw;
+    if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\n/, '').replace(/\n```$/, '');
+    }
+
+    const parsed = JSON.parse(jsonStr) as {
+      kind: StoryKind;
+      title: string;
+      description: string;
+      suggestedScriptName: string;
+      playwrightOutline: string[];
+      expectedOutcome: string;
+      baselineAssertions: string[];
+      repeatabilityNotes: string[];
+    };
+
+    // Build the UserStory object
+    const story: UserStory = {
+      id: `custom-${createHash('sha1').update(`${page.url}-${intent}-${Date.now()}`).digest('hex').slice(0, 8)}`,
+      kind: parsed.kind,
+      title: customTitle || parsed.title,
+      entryUrl: page.url,
+      description: parsed.description,
+      suggestedScriptName: parsed.suggestedScriptName,
+      supportingPages: [],
+      playwrightOutline: parsed.playwrightOutline,
+      expectedOutcome: parsed.expectedOutcome,
+      baselineAssertions: parsed.baselineAssertions,
+      repeatabilityNotes: parsed.repeatabilityNotes,
+      verificationStatus: 'unverified',
+      detectedFormFieldLabels: extractFormFieldLabels(page),
+    };
+
+    return story;
+  } catch (error) {
+    throw new Error(`Failed to generate story from intent: ${(error as Error).message}`);
+  }
+};
+

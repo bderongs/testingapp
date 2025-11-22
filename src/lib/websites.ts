@@ -117,10 +117,10 @@ export const listCrawlsForDomain = async (domain: string, limit = 20): Promise<C
 export const loadCrawlArtifacts = async (
   domain: string,
   crawlId?: string
-): Promise<{ siteMap: unknown | null; userStories: unknown | null; generatedLabel: string }> => {
+): Promise<{ siteMap: unknown | null; userStories: unknown | null; generatedLabel: string; resolvedCrawlId: string | null }> => {
   const summaries = await listCrawlSummaries(domain);
   const target = crawlId
-    ? summaries.find((summary) => summary.crawlId === crawlId)
+    ? summaries.find((summary) => summary.crawlId === crawlId) ?? summaries[0]
     : summaries[0];
 
   if (!target) {
@@ -128,6 +128,7 @@ export const loadCrawlArtifacts = async (
       siteMap: null,
       userStories: null,
       generatedLabel: 'No crawl artifacts detected',
+      resolvedCrawlId: null,
     };
   }
 
@@ -143,6 +144,7 @@ export const loadCrawlArtifacts = async (
     siteMap: siteMapRaw,
     userStories: storiesRaw,
     generatedLabel,
+    resolvedCrawlId: target.crawlId,
   };
 };
 

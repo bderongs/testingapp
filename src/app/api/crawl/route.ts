@@ -14,6 +14,8 @@ import {
   persistCrawlSessionSnapshot,
 } from '@/lib/crawlManager';
 import type { Cookie } from '@/types';
+import { sanitizeCookieList } from '@/lib/cookieTools';
+import { loadDomainCookies } from '@/storage/cookieStore';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +34,7 @@ const requestSchema = z.object({
   url: z.string().url(),
   maxPages: z.number().int().positive().max(200).optional(),
   sameOriginOnly: z.boolean().optional(),
+  generateTests: z.boolean().optional(),
   cookies: z.array(cookieSchema).optional(),
 });
 
@@ -58,7 +61,7 @@ const runCrawler = (
         args.push(`--cookies-file=${cookiesFilePath}`);
       }
 
-      const crawlDir = join(process.cwd(), 'output', session.domain, 'crawls', session.id);
+      const crawlDir = join(process.cwd(), 'output', 'domains', session.domain, 'crawls', session.id);
       await mkdir(crawlDir, { recursive: true });
       const logPath = join(crawlDir, 'crawl.log');
       try {
@@ -121,7 +124,7 @@ const runCrawler = (
         logStream.end(`${new Date().toISOString()} Failed to launch crawler: ${(error as Error).message}\n`);
       } else {
         try {
-          const fallbackDir = join(process.cwd(), 'output', session.domain, 'crawls', session.id);
+          const fallbackDir = join(process.cwd(), 'output', 'domains', session.domain, 'crawls', session.id);
           await mkdir(fallbackDir, { recursive: true });
           const logPath = join(fallbackDir, 'crawl.log');
           const fallbackStream = createWriteStream(logPath, { flags: 'a' });
@@ -149,7 +152,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const { url, maxPages = 10, sameOriginOnly = true, cookies } = parse.data;
+  const { url, maxPages = 10, sameOriginOnly = true, generateTests = false, cookies } = parse.data;
 
   // Create crawl session and check if queued
   const sessionResult = createCrawlSession(url, maxPages, sameOriginOnly);
@@ -165,6 +168,22 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const { session, queued } = sessionResult;
+
+  const mergeCookies = async (): Promise<Cookie[] | undefined> => {
+    const savedSnapshot = await loadDomainCookies(session.domain);
+    const saved = savedSnapshot.cookies ?? [];
+    const provided = cookies ?? [];
+
+    if (saved.length === 0 && provided.length === 0) {
+      return undefined;
+    }
+
+    const merged = sanitizeCookieList([...saved, ...provided]);
+    return merged.length > 0 ? merged : undefined;
+  };
+
+  const mergedCookies = await mergeCookies();
+
   try {
     await persistCrawlSessionSnapshot(session);
   } catch (error) {
@@ -184,11 +203,18 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // Run crawler asynchronously
-  runCrawler(
-    [`--url=${url}`, `--max-pages=${maxPages}`, `--same-origin-only=${sameOriginOnly}`],
-    session,
-    cookies
-  )
+  const cliArgs = [
+    `--url=${url}`,
+    `--max-pages=${maxPages}`,
+    `--same-origin-only=${sameOriginOnly}`,
+  ];
+
+  // Add test generation flags if requested
+  if (generateTests) {
+    cliArgs.push('--generate-tests', '--run-tests');
+  }
+
+  runCrawler(cliArgs, session, mergedCookies)
     .then(({ code, output }) => {
       if (code !== 0) {
         completeCrawlSession(session.id, false, output);
@@ -207,5 +233,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     domain: session.domain,
     queued: false,
     status: 'running',
+    cookiesInjected: mergedCookies?.length ?? 0,
   });
 }

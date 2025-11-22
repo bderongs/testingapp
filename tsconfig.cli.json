@@ -10,8 +10,23 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    }
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist", "src/app", "src/components", "src/lib/storyData.ts", "src/lib/utils.ts"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/app",
+    "src/components",
+    "src/lib/storyData.ts",
+    "src/lib/utils.ts"
+  ]
 }

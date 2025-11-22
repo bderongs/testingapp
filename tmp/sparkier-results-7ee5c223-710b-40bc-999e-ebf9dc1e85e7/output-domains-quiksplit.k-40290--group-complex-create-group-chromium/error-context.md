@@ -1,0 +1,57 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - link "QuikSplit" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - img "QuikSplit" [ref=e6]
+        - generic [ref=e7]:
+          - button "Toggle theme" [ref=e8]:
+            - img [ref=e9]
+          - generic [ref=e11]:
+            - link "My Groups" [ref=e12] [cursor=pointer]:
+              - /url: /groups
+              - img [ref=e13]
+              - generic [ref=e15]: Groups
+            - button "Baptiste Derongs Baptiste Derongs baptiste.derongs@gmail.com" [ref=e17]:
+              - img "Baptiste Derongs" [ref=e18]
+              - generic [ref=e19]:
+                - generic [ref=e20]: Baptiste Derongs
+                - generic [ref=e21]: baptiste.derongs@gmail.com
+              - img [ref=e22]
+      - navigation "Breadcrumb" [ref=e25]:
+        - link "Home" [ref=e27] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e28]:
+          - img [ref=e29]
+          - link "Groups" [ref=e31] [cursor=pointer]:
+            - /url: /groups
+        - generic [ref=e32]:
+          - img [ref=e33]
+          - generic [ref=e35]: Test Group
+  - main [ref=e36]:
+    - generic [ref=e37]:
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - heading "Test Group" [level=1] [ref=e41]
+          - paragraph
+        - button "Share group" [ref=e43]:
+          - img [ref=e44]
+          - text: Share group
+      - generic [ref=e47]:
+        - link "Overview" [ref=e48] [cursor=pointer]:
+          - /url: /groups/73160fc5-a4e5-46af-b2cb-4ba15d3f9d3a
+        - link "Expenses" [ref=e49] [cursor=pointer]:
+          - /url: /groups/73160fc5-a4e5-46af-b2cb-4ba15d3f9d3a/expenses
+        - link "Settlements" [ref=e50] [cursor=pointer]:
+          - /url: /groups/73160fc5-a4e5-46af-b2cb-4ba15d3f9d3a/settlements
+        - link "Statistics" [ref=e51] [cursor=pointer]:
+          - /url: /groups/73160fc5-a4e5-46af-b2cb-4ba15d3f9d3a/statistics
+      - paragraph [ref=e53]: Loading...
+  - contentinfo [ref=e54]:
+    - generic [ref=e56]: © 2025 QuikSplit
+  - alert [ref=e57]
+```

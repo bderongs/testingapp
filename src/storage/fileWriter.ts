@@ -33,7 +33,7 @@ const replicateSnapshot = async (sourceDir: string, targetDir: string): Promise<
 export const persistArtifacts = async (
   artifacts: AuditArtifacts,
   crawlId?: string
-): Promise<void> => {
+): Promise<string> => {
   const domain = deriveDomain(artifacts.crawl.baseUrl);
   const resolvedCrawlId = crawlId ?? ensureCrawlId();
   const timestamp = new Date().toISOString();
@@ -48,6 +48,7 @@ export const persistArtifacts = async (
   const crawlPayload = JSON.stringify(
     {
       baseUrl: artifacts.crawl.baseUrl,
+      pendingUrls: artifacts.crawl.pendingUrls,
       pages: Array.from(artifacts.crawl.pages.values()),
       edges: Array.from(artifacts.crawl.edges.entries()).map(([source, targets]) => ({
         source,
@@ -79,8 +80,8 @@ export const persistArtifacts = async (
 
   await writeFile(join(crawlDir, 'session.json'), `${JSON.stringify(sessionSnapshot, null, 2)}\n`);
 
-  const domainSpecsDir = join(crawlDir, 'playwright');
-  await persistSpecs(artifacts.userStories, domainSpecsDir);
+  // const domainSpecsDir = join(crawlDir, 'playwright');
+  // await persistSpecs(artifacts.userStories, domainSpecsDir);
 
   // Maintain convenience snapshots
   await replicateSnapshot(crawlDir, latestDir);
@@ -93,4 +94,6 @@ export const persistArtifacts = async (
     crawlDir,
     timestamp,
   });
+
+  return crawlDir;
 };

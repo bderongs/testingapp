@@ -7,6 +7,9 @@ import { crawlSite } from './lib/crawler';
 import { identifyUserStories } from './lib/storyBuilder';
 import { persistArtifacts } from './storage/fileWriter';
 import { logger } from './utils/logger';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
 
 const rawArgsToRecord = (argv: readonly string[]): Record<string, string | boolean | number> => {
   const result: Record<string, string | boolean | number> = {};
@@ -49,6 +52,8 @@ const argsSchema = z.object({
   'navigation-timeout': z.number().int().positive().optional(),
   'crawl-id': z.string().optional(),
   'cookies-file': z.string().optional(),
+  'generate-tests': z.boolean().optional(),
+  'run-tests': z.boolean().optional(),
 });
 
 const mapArgsToOptions = async (parsed: z.infer<typeof argsSchema>): Promise<CrawlOptions> => {
@@ -76,7 +81,7 @@ const mapArgsToOptions = async (parsed: z.infer<typeof argsSchema>): Promise<Cra
 
 const printUsage = (): void => {
   logger.info(
-    'Usage: tsx src/index.ts --url=https://example.com [--max-pages=40] [--same-origin-only=false] [--navigation-timeout=15000]'
+    'Usage: tsx src/index.ts --url=https://example.com [--max-pages=40] [--same-origin-only=false] [--navigation-timeout=15000] [--generate-tests] [--run-tests]'
   );
 };
 
@@ -93,6 +98,8 @@ const main = async (): Promise<void> => {
 
   const options = await mapArgsToOptions(parseResult.data);
   const crawlId = parseResult.data['crawl-id'];
+  const shouldGenerateTests = parseResult.data['generate-tests'];
+  const shouldRunTests = parseResult.data['run-tests'];
 
   logger.info(`Starting crawl for ${options.baseUrl}${crawlId ? ` (crawl ID: ${crawlId})` : ''}`);
   if (options.cookies && options.cookies.length > 0) {
@@ -102,10 +109,32 @@ const main = async (): Promise<void> => {
   const crawl = await crawlSite(options);
   const userStories = identifyUserStories(crawl);
 
-  await persistArtifacts({ crawl, userStories }, crawlId);
+  const crawlDir = await persistArtifacts({ crawl, userStories }, crawlId);
 
   logger.info(`Crawl complete. ${crawl.pages.size} page(s) mapped.`);
   logger.info(`Identified ${userStories.length} user stor${userStories.length === 1 ? 'y' : 'ies'}.`);
+
+  if (shouldGenerateTests) {
+    logger.info('Generating Playwright tests for identified stories...');
+    const { generatePlaywrightTest } = await import('./lib/testGenerator');
+    const { saveTests } = await import('./lib/testRunner');
+
+    const generatedCodes = await Promise.all(
+      userStories.map(async (story) => {
+        const page = crawl.pages.get(story.entryUrl);
+        if (!page) return null;
+        return generatePlaywrightTest(story, page);
+      })
+    );
+
+    await saveTests(userStories, generatedCodes, crawlDir);
+    logger.info('Test generation complete.');
+  }
+
+  if (shouldRunTests) {
+    const { runTests } = await import('./lib/testRunner');
+    await runTests(crawlDir);
+  }
 };
 
 main().catch((error: unknown) => {

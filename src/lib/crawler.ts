@@ -1,6 +1,7 @@
 // This file implements the Playwright-powered crawler that maps a website into structured page summaries.
 
 import { chromium, Page, Response as PlaywrightResponse } from 'playwright';
+import type OpenAI from 'openai';
 
 import type {
   BreadcrumbEntry,
@@ -36,6 +37,7 @@ interface DomExtractionResult {
     readonly isInMainContent: boolean;
     readonly priority: number;
   }>;
+  readonly actionHints: PageSummary['actionHints'];
 }
 
 const DEFAULT_MAX_PAGES = 40;
@@ -43,6 +45,110 @@ const DEFAULT_TIMEOUT_MS = 15000;
 
 const extractDomMetadata = async (page: Page) =>
   page.evaluate(DOM_EXTRACTION_SOURCE) as Promise<DomExtractionResult>;
+
+interface AiPageInsight {
+  readonly goal?: string;
+  readonly primaryActions?: string[];
+  readonly recommendedLinks?: string[];
+}
+
+let openAiClientPromise: Promise<OpenAI> | null = null;
+const loadOpenAiClient = async (): Promise<OpenAI | null> => {
+  if (!process.env.OPENAI_API_KEY) {
+    return null;
+  }
+  if (!openAiClientPromise) {
+    openAiClientPromise = import('openai').then(
+      ({ default: OpenAIClient }) => new OpenAIClient({ apiKey: process.env.OPENAI_API_KEY! })
+    );
+  }
+  try {
+    return await openAiClientPromise;
+  } catch (error) {
+    logger.warn(`Failed to initialize OpenAI client: ${(error as Error).message}`);
+    return null;
+  }
+};
+
+const summarizePageWithAi = async (
+  pageUrl: string,
+  dom: DomExtractionResult
+): Promise<AiPageInsight | null> => {
+  const client = await loadOpenAiClient();
+  if (!client) {
+    return null;
+  }
+
+  const headingSummary = dom.headingOutline
+    .slice(0, 5)
+    .map((heading) => `- H${heading.level}: ${heading.text}`)
+    .join('\n');
+
+  const ctaSummary = dom.primaryCtas
+    .map(
+      (cta, index) =>
+        `${index + 1}. ${cta.label} (${cta.elementType}${cta.isInMainContent ? ', main' : ''})`
+    )
+    .join('\n');
+
+  const linkSummary = dom.links
+    .slice(0, 15)
+    .map((link, index) => `${index + 1}. ${link.text || '(no text)'} -> ${link.url}`)
+    .join('\n');
+
+  const prompt = `You are assisting a web crawler. Analyze the page and return JSON with:
+- "goal": a concise description of the page's main purpose.
+- "primary_actions": up to three key actions a user should take on this page.
+- "recommended_links": up to five URLs from the provided link list worth visiting next (use the exact URLs given, or relative forms if supplied).
+
+Page URL: ${pageUrl}
+Title: ${dom.title}
+Meta description: ${dom.metaDescription ?? 'N/A'}
+Top headings:
+${headingSummary || 'None'}
+
+Primary CTAs:
+${ctaSummary || 'None'}
+
+Available links:
+${linkSummary || 'None'}
+
+Return JSON like {"goal": "...", "primary_actions": ["..."], "recommended_links": ["url1", "..."]}.`;
+
+  try {
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      max_tokens: 400,
+      messages: [
+        { role: 'system', content: 'You summarize web pages for an automated crawler.' },
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    const raw = completion.choices[0]?.message?.content?.trim();
+    if (!raw) {
+      return null;
+    }
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const toParse = jsonMatch ? jsonMatch[0] : raw;
+    const parsed = JSON.parse(toParse) as {
+      goal?: string;
+      primary_actions?: string[];
+      recommended_links?: string[];
+    };
+
+    return {
+      goal: parsed.goal,
+      primaryActions: parsed.primary_actions ?? [],
+      recommendedLinks: parsed.recommended_links ?? [],
+    };
+  } catch (error) {
+    logger.warn(`Failed to summarize page ${pageUrl}: ${(error as Error).message}`);
+    return null;
+  }
+};
 
 export const crawlSite = async ({
   baseUrl,
@@ -125,6 +231,17 @@ export const crawlSite = async ({
       const outgoing: string[] = [];
       if (domData) {
         logger.info(`Found ${domData.links.length} link(s) on ${url}`);
+        const aiInsight = await summarizePageWithAi(url, domData);
+        const recommendedSet = new Set<string>();
+        if (aiInsight?.recommendedLinks) {
+          aiInsight.recommendedLinks.forEach((link) => {
+            const resolved = safeResolve(url, link);
+            if (resolved) {
+              recommendedSet.add(resolved);
+            }
+          });
+        }
+
         const pageSummary: PageSummary = {
           url,
           title: domData.title,
@@ -141,8 +258,15 @@ export const crawlSite = async ({
           metaDescription: domData.metaDescription,
           primaryKeywords: domData.primaryKeywords,
           primaryCtas: domData.primaryCtas,
+          actionHints: domData.actionHints,
+          pageGoal: aiInsight?.goal,
+          primaryActions: aiInsight?.primaryActions,
+          recommendedLinks: aiInsight ? Array.from(recommendedSet) : undefined,
         };
         pages.set(url, pageSummary);
+
+        const prioritizedTargets: string[] = [];
+        const normalTargets: string[] = [];
 
         domData.links.forEach((link) => {
           const resolved = safeResolve(url, link.url);
@@ -156,10 +280,26 @@ export const crawlSite = async ({
 
           outgoing.push(resolved);
 
-          if (!discovered.has(resolved) && discovered.size < maxPages) {
-            pending.push(resolved);
-            discovered.add(resolved);
-            logger.info(`Queued ${resolved}`);
+          const container = recommendedSet.has(resolved) ? prioritizedTargets : normalTargets;
+          if (!container.includes(resolved)) {
+            container.push(resolved);
+          }
+        });
+
+        for (let i = prioritizedTargets.length - 1; i >= 0; i -= 1) {
+          const target = prioritizedTargets[i];
+          if (!discovered.has(target) && discovered.size < maxPages) {
+            pending.unshift(target);
+            discovered.add(target);
+            logger.info(`Prioritized ${target}`);
+          }
+        }
+
+        normalTargets.forEach((target) => {
+          if (!discovered.has(target) && discovered.size < maxPages) {
+            pending.push(target);
+            discovered.add(target);
+            logger.info(`Queued ${target}`);
           }
         });
       }
@@ -176,5 +316,6 @@ export const crawlSite = async ({
     baseUrl: normalizedBase,
     pages,
     edges,
+    pendingUrls: Array.from(discovered).filter((candidate) => !visited.has(candidate)),
   };
 };

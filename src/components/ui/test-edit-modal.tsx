@@ -4,6 +4,8 @@
 import { useState } from 'react';
 import { X, Wand2, Loader2, CheckCircle2, AlertCircle, Code, Eye, EyeOff } from 'lucide-react';
 
+import type { ActionOutcome } from '@/types';
+
 interface TestEditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,6 +14,12 @@ interface TestEditModalProps {
   baselineAssertions: readonly string[];
   crawlId?: string;
   domain?: string | null;
+  entryUrl: string;
+  playwrightOutline: readonly string[];
+  primaryCtaLabel?: string;
+  primaryActionLabel?: string;
+  primaryActionOutcome?: ActionOutcome;
+  formFieldLabels?: readonly string[];
 }
 
 interface EditResponse {
@@ -23,7 +31,21 @@ interface EditResponse {
   backupPath?: string;
 }
 
-export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineAssertions, crawlId, domain }: TestEditModalProps) => {
+export const TestEditModal = ({
+  isOpen,
+  onClose,
+  specSlug,
+  storyTitle,
+  baselineAssertions,
+  crawlId,
+  domain,
+  entryUrl,
+  playwrightOutline,
+  primaryCtaLabel,
+  primaryActionLabel,
+  primaryActionOutcome,
+  formFieldLabels,
+}: TestEditModalProps) => {
   const [instruction, setInstruction] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [preview, setPreview] = useState<EditResponse | null>(null);
@@ -72,11 +94,23 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
       if (domain) {
         url.searchParams.set('domain', domain);
       }
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction: instruction.trim(), apply: false, baselineAssertions }),
-      });
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instruction: instruction.trim(),
+        apply: false,
+        baselineAssertions,
+        playwrightOutline,
+        context: {
+          entryUrl,
+          primaryCtaLabel,
+          primaryActionLabel,
+          primaryActionOutcome,
+          formFieldLabels,
+        },
+      }),
+    });
 
       const data = (await response.json()) as EditResponse;
       if (data.success && data.modified) {
@@ -105,11 +139,23 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
       if (domain) {
         url.searchParams.set('domain', domain);
       }
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction: instruction.trim(), apply: true, baselineAssertions: preview.modified }),
-      });
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instruction: instruction.trim(),
+        apply: true,
+        baselineAssertions: preview.modified,
+        playwrightOutline,
+        context: {
+          entryUrl,
+          primaryCtaLabel,
+          primaryActionLabel,
+          primaryActionOutcome,
+          formFieldLabels,
+        },
+      }),
+    });
 
       const data = (await response.json()) as EditResponse;
       if (data.success) {
@@ -137,6 +183,31 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
   }
 
   const currentAssertions = preview?.modified || baselineAssertions;
+  const formSummary =
+    !formFieldLabels || formFieldLabels.length === 0
+      ? 'No form elements were detected during the crawl; avoid assuming a <form> role unless you add one manually.'
+      : `Detected form input labels: ${formFieldLabels.join(', ')}.`;
+  const outcomeSummary = (() => {
+    if (!primaryActionOutcome) {
+      return null;
+    }
+    switch (primaryActionOutcome.kind) {
+      case 'navigation':
+        return primaryActionOutcome.targetUrl
+          ? `Action detected as a navigation to ${primaryActionOutcome.targetUrl}.`
+          : 'Action detected as a navigation to a follow-up page.';
+      case 'inline-form':
+        return 'Action reveals an inline form without navigating away.';
+      case 'modal':
+        return 'Action opens a modal dialog as part of the flow.';
+      case 'inline-content':
+        return 'Action expands inline content to continue the flow.';
+      case 'no-change':
+        return 'Action keeps the experience on the same page (no redirect).';
+      default:
+        return 'Action outcome observed during the crawl is unknown.';
+    }
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -217,6 +288,30 @@ export const TestEditModal = ({ isOpen, onClose, specSlug, storyTitle, baselineA
                 {error}
               </div>
             )}
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <p className="font-semibold text-slate-700 mb-1">Context</p>
+              <ul className="space-y-1">
+                <li>
+                  <span className="font-medium text-slate-700">Entry URL:</span> {entryUrl}
+                </li>
+                {primaryCtaLabel ? (
+                  <li>
+                    <span className="font-medium text-slate-700">Primary CTA:</span> {primaryCtaLabel}
+                  </li>
+                ) : null}
+                {primaryActionLabel ? (
+                  <li>
+                    <span className="font-medium text-slate-700">Primary action:</span> {primaryActionLabel}
+                  </li>
+                ) : null}
+                {outcomeSummary ? (
+                  <li>
+                    <span className="font-medium text-slate-700">Action outcome:</span> {outcomeSummary}
+                  </li>
+                ) : null}
+                <li>{formSummary}</li>
+              </ul>
+            </div>
           </div>
 
           {/* Preview/Assertions */}

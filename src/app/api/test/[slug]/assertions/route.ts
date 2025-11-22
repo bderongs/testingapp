@@ -6,7 +6,10 @@ import { spawn } from 'node:child_process';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import type { Cookie } from '@/types';
 import { findDomainForCrawl } from '@/lib/websites';
+import { loadDomainCookies } from '@/storage/cookieStore';
+import { sanitizeFileSlug } from '@/lib/sanitize';
 
 export const runtime = 'nodejs';
 
@@ -123,12 +126,23 @@ const generateAssertionTest = (story: {
   baselineAssertions: string[];
   primaryCtaLabel?: string;
   suggestedScriptName: string;
-}): string => {
+}, cookies?: Cookie[]): string => {
   const lines: string[] = [];
   lines.push("import { test, expect } from 'playwright/test';");
   lines.push('');
   lines.push(`test.describe('${story.suggestedScriptName}', () => {`);
-  lines.push(`  test('Validate baseline assertions', async ({ page }) => {`);
+  lines.push(`  test('Validate baseline assertions', async ({ context, page }) => {`);
+  if (cookies && cookies.length > 0) {
+    lines.push('    // Inject saved session cookies before navigation to reuse authenticated state.');
+    lines.push('    await context.addCookies(');
+    const serialized = JSON.stringify(cookies, null, 2)
+      .split('\n')
+      .map((line) => `      ${line}`)
+      .join('\n');
+    lines.push(serialized);
+    lines.push('    );');
+    lines.push('');
+  }
   lines.push(`    await page.goto('${story.entryUrl}', { waitUntil: 'domcontentloaded' });`);
   lines.push(`    // Wait for page to be fully interactive`);
   lines.push(`    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});`);
@@ -257,6 +271,7 @@ export async function POST(
 
     // Load stories from the correct directory
     const stories = (await readJson<Array<{
+      id?: string;
       suggestedScriptName: string;
       entryUrl: string;
       baselineAssertions: string[];
@@ -264,7 +279,7 @@ export async function POST(
     }>>(storiesFile)) ?? [];
 
     const story = stories.find((s) => {
-      const storySlug = s.suggestedScriptName.replace(/[^a-z0-9-]/g, '');
+      const storySlug = sanitizeFileSlug(s.suggestedScriptName, s.id ?? s.suggestedScriptName);
       return storySlug === slug;
     });
 
@@ -279,7 +294,9 @@ export async function POST(
     }
 
     // Generate test file for assertions
-    const assertionTestCode = generateAssertionTest(story);
+    const savedCookies = domain ? await loadDomainCookies(domain) : { cookies: [], updatedAt: null };
+
+    const assertionTestCode = generateAssertionTest(story, savedCookies.cookies);
     const assertionSpecFile = join(specDir, `${slug}.assertions.spec.ts`);
 
     // Write temporary test file

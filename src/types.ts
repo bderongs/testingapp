@@ -34,6 +34,7 @@ export interface FormFieldSummary {
   readonly name: string;
   readonly type: string;
   readonly label?: string;
+  readonly placeholder?: string;
   readonly required: boolean;
 }
 
@@ -67,6 +68,47 @@ export interface BreadcrumbEntry {
   readonly text: string;
 }
 
+export type ActionHintCategory =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'view'
+  | 'invite'
+  | 'share'
+  | 'settle'
+  | 'search'
+  | 'filter'
+  | 'navigate'
+  | 'other';
+
+export type ActionHintLocation = 'main' | 'navigation' | 'header' | 'footer' | 'modal' | 'unknown';
+
+export type ActionOutcomeKind =
+  | 'navigation'
+  | 'inline-form'
+  | 'modal'
+  | 'inline-content'
+  | 'no-change'
+  | 'unknown';
+
+export interface ActionOutcome {
+  readonly kind: ActionOutcomeKind;
+  readonly targetUrl?: string;
+  readonly evidence?: readonly string[];
+  readonly notes?: string;
+}
+
+export interface ActionHint {
+  readonly label: string;
+  readonly category: ActionHintCategory;
+  readonly elementType: 'button' | 'link' | 'input' | 'unknown';
+  readonly confidence: number;
+  readonly location: ActionHintLocation;
+  readonly supportingText: readonly string[];
+  readonly selector?: string;
+  readonly outcome?: ActionOutcome;
+}
+
 export type CtaMetadata = {
   readonly label: string;
   readonly elementType: 'button' | 'link' | 'unknown';
@@ -90,12 +132,18 @@ export interface PageSummary {
   readonly metaDescription?: string;
   readonly primaryKeywords: readonly string[];
   readonly primaryCtas: readonly CtaMetadata[];
+  readonly actionHints: readonly ActionHint[];
+  readonly pageGoal?: string;
+  readonly primaryActions?: readonly string[];
+  readonly recommendedLinks?: readonly string[];
 }
 
 export interface CrawlResult {
   readonly baseUrl: string;
   readonly pages: ReadonlyMap<string, PageSummary>;
   readonly edges: ReadonlyMap<string, readonly string[]>;
+  readonly pendingUrls: readonly string[];
+  readonly crawlDir?: string;
 }
 
 export interface UserStory {
@@ -107,11 +155,19 @@ export interface UserStory {
   readonly suggestedScriptName: string;
   readonly supportingPages: readonly string[];
   readonly primaryCtaLabel?: string;
+  readonly primaryActionLabel?: string;
+  readonly primaryActionCategory?: ActionHintCategory;
+  readonly primaryActionOutcome?: ActionOutcome;
+  readonly actionSupportingEvidence?: readonly string[];
+  readonly detectedFormFieldLabels?: readonly string[];
   readonly playwrightOutline: readonly string[];
   readonly expectedOutcome: string;
   readonly baselineAssertions: readonly string[];
   readonly repeatabilityNotes: readonly string[];
   readonly verificationStatus: 'unverified' | 'baseline' | 'outdated';
+  readonly pageGoal?: string;
+  readonly primaryActions?: readonly string[];
+  readonly recommendedLinks?: readonly string[];
 }
 
 export interface AuditArtifacts {

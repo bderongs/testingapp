@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, Loader2, Play } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Play, Cookie as CookieIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import type { Cookie } from '@/types';
@@ -11,6 +11,11 @@ type TimerHandle = ReturnType<typeof setTimeout>;
 
 interface CrawlLauncherProps {
   defaultUrl: string;
+  domain: string | null;
+  cookieSnapshot: {
+    cookies: Cookie[];
+    updatedAtLabel: string;
+  };
 }
 
 interface CrawlResponse {
@@ -114,16 +119,20 @@ const parseDevtoolsTableCookies = (
   return cookies.length > 0 ? cookies : null;
 };
 
-export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
+export const CrawlLauncher = ({ defaultUrl, domain, cookieSnapshot }: CrawlLauncherProps) => {
   const [url, setUrl] = useState(defaultUrl);
   const [maxPages, setMaxPages] = useState(10);
   const [sameOriginOnly, setSameOriginOnly] = useState(true);
+  const [generateTests, setGenerateTests] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CrawlResponse | null>(null);
   const [showCookies, setShowCookies] = useState(false);
   const [cookiesJson, setCookiesJson] = useState('');
   const [cookiesError, setCookiesError] = useState<string | null>(null);
   const [cookiesPreview, setCookiesPreview] = useState<number | null>(null);
+  const [useSavedCookies, setUseSavedCookies] = useState(cookieSnapshot.cookies.length > 0);
+  const [activeSavedCookies, setActiveSavedCookies] = useState<Cookie[]>(cookieSnapshot.cookies);
+  const [savedUpdatedLabel, setSavedUpdatedLabel] = useState(cookieSnapshot.updatedAtLabel);
   const pollTimerRef = useRef<TimerHandle | null>(null);
 
   useEffect(() => {
@@ -134,6 +143,38 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    setUseSavedCookies(cookieSnapshot.cookies.length > 0);
+    setActiveSavedCookies(cookieSnapshot.cookies);
+    setSavedUpdatedLabel(cookieSnapshot.updatedAtLabel);
+  }, [cookieSnapshot.cookies, cookieSnapshot.updatedAtLabel]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleCookieUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ domain: string; cookies: Cookie[]; updatedAtLabel?: string }>).detail;
+      if (!detail) {
+        return;
+      }
+      if (!domain || detail.domain !== domain) {
+        return;
+      }
+      setActiveSavedCookies(detail.cookies);
+      setUseSavedCookies(detail.cookies.length > 0);
+      if (detail.updatedAtLabel) {
+        setSavedUpdatedLabel(detail.updatedAtLabel);
+      } else {
+        setSavedUpdatedLabel(`Updated ${new Date().toLocaleString()}`);
+      }
+    };
+
+    window.addEventListener('sparkier:cookies-updated', handleCookieUpdate as EventListener);
+    return () => window.removeEventListener('sparkier:cookies-updated', handleCookieUpdate as EventListener);
+  }, [domain]);
 
   const stopPolling = () => {
     if (pollTimerRef.current) {
@@ -165,7 +206,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
             setTimeout(poll, 2000); // Poll more frequently for first few attempts
             return;
           }
-          
+
           setResult({
             success: false,
             message: data.message || 'Failed to check crawl status',
@@ -182,7 +223,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
             setTimeout(poll, 2000); // Poll more frequently for first few attempts
             return;
           }
-          
+
           setResult({
             success: false,
             message: 'Crawl session data not available',
@@ -279,8 +320,8 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                 expires: cookie.expires ? Number(cookie.expires) : undefined,
                 httpOnly: cookie.httpOnly === true || cookie.httpOnly === 'true',
                 secure: cookie.secure === true || cookie.secure === 'true',
-                sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None' 
-                  ? cookie.sameSite 
+                sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None'
+                  ? cookie.sameSite
                   : undefined,
               });
             }
@@ -299,8 +340,8 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
               expires: cookie.expires ? Number(cookie.expires) : undefined,
               httpOnly: cookie.httpOnly === true || cookie.httpOnly === 'true',
               secure: cookie.secure === true || cookie.secure === 'true',
-              sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None' 
-                ? cookie.sameSite 
+              sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None'
+                ? cookie.sameSite
                 : undefined,
             });
           }
@@ -332,8 +373,8 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                 value: value.trim(),
                 domain: domain.trim() || fallbackDomain,
                 path: path.trim() || '/',
-                expires: expiration && expiration !== '0' && expiration !== '-1' 
-                  ? Math.floor(Number(expiration)) 
+                expires: expiration && expiration !== '0' && expiration !== '-1'
+                  ? Math.floor(Number(expiration))
                   : undefined,
                 secure: secure === 'TRUE' || secure === 'true',
                 httpOnly: false,
@@ -430,7 +471,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
     // Method 1: Try JSON array format (most common from browser extensions)
     try {
       const parsed = JSON.parse(input);
-      
+
       if (Array.isArray(parsed)) {
         // Standard JSON array format
         for (const cookie of parsed) {
@@ -445,8 +486,8 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                 expires: cookie.expires ? Number(cookie.expires) : undefined,
                 httpOnly: cookie.httpOnly === true || cookie.httpOnly === 'true',
                 secure: cookie.secure === true || cookie.secure === 'true',
-                sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None' 
-                  ? cookie.sameSite 
+                sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None'
+                  ? cookie.sameSite
                   : undefined,
               });
             }
@@ -470,8 +511,8 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                 expires: cookie.expires ? Number(cookie.expires) : undefined,
                 httpOnly: cookie.httpOnly === true || cookie.httpOnly === 'true',
                 secure: cookie.secure === true || cookie.secure === 'true',
-                sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None' 
-                  ? cookie.sameSite 
+                sameSite: cookie.sameSite === 'Strict' || cookie.sameSite === 'Lax' || cookie.sameSite === 'None'
+                  ? cookie.sameSite
                   : undefined,
               });
             }
@@ -508,12 +549,12 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
           // Netscape format
           const [domain, , path, secure, expiration, name, ...valueParts] = parts;
           const value = valueParts.join('\t'); // In case value contains tabs
-          
+
           if (name && value) {
-            const expires = expiration && expiration !== '0' && expiration !== '-1' 
-              ? Math.floor(Number(expiration)) 
+            const expires = expiration && expiration !== '0' && expiration !== '-1'
+              ? Math.floor(Number(expiration))
               : undefined;
-            
+
             cookies.push({
               name: name.trim(),
               value: value.trim(),
@@ -561,7 +602,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
           }
         }
       }
-      
+
       if (cookies.length > 0) {
         setCookiesError(null);
         return cookies;
@@ -592,7 +633,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
           });
         }
       }
-      
+
       if (cookies.length > 0) {
         setCookiesError(null);
         return cookies;
@@ -609,10 +650,18 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
     setIsSubmitting(true);
     setResult(null);
 
-    const cookies = parseCookies();
-    if (cookiesJson.trim() && !cookies) {
+    const manualCookies = parseCookies();
+    if (cookiesJson.trim() && !manualCookies) {
       setIsSubmitting(false);
       return;
+    }
+
+    const payloadCookies: Cookie[] = [];
+    if (useSavedCookies && activeSavedCookies.length > 0) {
+      payloadCookies.push(...activeSavedCookies);
+    }
+    if (manualCookies && manualCookies.length > 0) {
+      payloadCookies.push(...manualCookies);
     }
 
     try {
@@ -621,7 +670,13 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
         headers: {
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ url, maxPages, sameOriginOnly, cookies: cookies || undefined }),
+        body: JSON.stringify({
+          url,
+          maxPages,
+          sameOriginOnly,
+          generateTests,
+          cookies: payloadCookies.length > 0 ? payloadCookies : undefined,
+        }),
       });
 
       const payload = (await response.json()) as CrawlResponse;
@@ -654,43 +709,57 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <form className="grid gap-4 md:grid-cols-4" onSubmit={handleSubmit}>
-        <div className="md:col-span-2">
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            Target URL
-            <input
-              required
-              type="url"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://www.sparkier.io"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-sparkier-primary focus:outline-none focus:ring-2 focus:ring-sparkier-primary/30"
-            />
-          </label>
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="md:col-span-2">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              Target URL
+              <input
+                required
+                type="url"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://www.sparkier.io"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-sparkier-primary focus:outline-none focus:ring-2 focus:ring-sparkier-primary/30"
+              />
+            </label>
+          </div>
+          <div>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              Max Pages
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={maxPages}
+                onChange={(event) => setMaxPages(Number(event.target.value))}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-sparkier-primary focus:outline-none focus:ring-2 focus:ring-sparkier-primary/30"
+              />
+            </label>
+          </div>
         </div>
-        <div>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            Max Pages
-            <input
-              type="number"
-              min={1}
-              max={200}
-              value={maxPages}
-              onChange={(event) => setMaxPages(Number(event.target.value))}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-sparkier-primary focus:outline-none focus:ring-2 focus:ring-sparkier-primary/30"
-            />
-          </label>
-        </div>
-        <div className="flex items-end justify-between gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={sameOriginOnly}
-              onChange={(event) => setSameOriginOnly(event.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-sparkier-primary focus:ring-sparkier-primary"
-            />
-            Same-origin only
-          </label>
+
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={sameOriginOnly}
+                onChange={(event) => setSameOriginOnly(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-sparkier-primary focus:ring-sparkier-primary"
+              />
+              Same-origin only
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={generateTests}
+                onChange={(event) => setGenerateTests(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-sparkier-primary focus:ring-sparkier-primary"
+              />
+              Generate Playwright tests
+            </label>
+          </div>
           <button
             type="submit"
             disabled={isSubmitting}
@@ -700,19 +769,25 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
             )}
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
-            {isSubmitting ? 'Running?' : 'Run Crawl'}
+            {isSubmitting ? 'Running…' : 'Run Crawl'}
           </button>
+          <span className="text-xs text-slate-400">
+            Tests: {generateTests ? 'ON' : 'OFF'}
+          </span>
         </div>
       </form>
 
-      {/* Cookie Session Section */}
+      {/* Cookie Session Section - Collapsible */}
       <div className="mt-4 border-t border-slate-200 pt-4">
         <button
           type="button"
           onClick={() => setShowCookies(!showCookies)}
           className="flex w-full items-center justify-between text-sm font-medium text-slate-700 hover:text-slate-900"
         >
-          <span>Cookie Session (Optional)</span>
+          <div className="flex items-center gap-2">
+            <CookieIcon className="h-4 w-4 text-sparkier-primary" aria-hidden />
+            <span>Cookies {activeSavedCookies.length > 0 ? `(${activeSavedCookies.length} saved)` : '(Optional)'}</span>
+          </div>
           {showCookies ? (
             <ChevronUp className="h-4 w-4" aria-hidden />
           ) : (
@@ -722,6 +797,30 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
 
         {showCookies && (
           <div className="mt-3 space-y-3">
+            {/* Saved cookies info */}
+            {activeSavedCookies.length > 0 && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm text-slate-700">
+                    <span className="font-medium">{activeSavedCookies.length} saved cookie{activeSavedCookies.length === 1 ? '' : 's'}</span>
+                    <span className="text-xs text-slate-500 ml-2">{savedUpdatedLabel}</span>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={useSavedCookies}
+                      onChange={(event) => setUseSavedCookies(event.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-sparkier-primary focus:ring-sparkier-primary"
+                    />
+                    Use saved
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-slate-500">
+              Cookies entered here are merged with your saved session cookies for this run only.
+            </p>
             <div>
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
                 Cookies (Multiple Formats Supported)
@@ -732,7 +831,7 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                     setCookiesJson(value);
                     setCookiesError(null);
                     setCookiesPreview(null);
-                    
+
                     // Try to parse in real-time for preview (debounced)
                     if (value.trim()) {
                       const parsed = parseCookiesForPreview(value);
@@ -745,9 +844,9 @@ export const CrawlLauncher = ({ defaultUrl }: CrawlLauncherProps) => {
                   rows={8}
                   className={cn(
                     'rounded-lg border px-3 py-2 font-mono text-xs shadow-sm focus:outline-none focus:ring-2',
-                    cookiesError 
-                      ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/30' 
-                      : cookiesPreview 
+                    cookiesError
+                      ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/30'
+                      : cookiesPreview
                         ? 'border-emerald-300 focus:border-emerald-500 focus:ring-emerald-500/30'
                         : 'border-slate-300 focus:border-sparkier-primary focus:ring-sparkier-primary/30'
                   )}
