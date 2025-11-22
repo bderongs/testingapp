@@ -207,7 +207,7 @@ const updateStoryMetadata = async ({
   crawlId: string | null;
   storageStatePath: string | null;
   cookies: Cookie[];
-}): Promise<{ entryUrl?: string; updated: boolean }> => {
+}): Promise<{ entryUrl: string | undefined; updated: boolean }> => {
   const storiesPath = join(specDir, '..', 'user-stories.json');
   let stories: Array<Record<string, any>>;
 
@@ -215,7 +215,7 @@ const updateStoryMetadata = async ({
     const raw = await readFile(storiesPath, 'utf8');
     stories = JSON.parse(raw) as Array<Record<string, any>>;
   } catch {
-    return { updated: false };
+    return { updated: false, entryUrl: undefined };
   }
 
   const storyIndex = stories.findIndex(
@@ -224,7 +224,7 @@ const updateStoryMetadata = async ({
   );
 
   if (storyIndex === -1) {
-    return { updated: false };
+    return { updated: false, entryUrl: undefined };
   }
 
   const story = stories[storyIndex];
